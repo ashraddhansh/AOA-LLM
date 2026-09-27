@@ -77,7 +77,12 @@ def build_default_services() -> ApiServices:
             vector_store=store,
         ),
         retrieval=RetrievalService(embedder=embedder, vector_store=store),
-        generation=GenerationService(GeminiGenerator(api_key=api_key)),
+        generation=GenerationService(
+            GeminiGenerator(
+                api_key=api_key,
+                model=os.getenv("GEMINI_MODEL"),
+            )
+        ),
     )
 
 
