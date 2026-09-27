@@ -59,3 +59,19 @@ def test_lynx_missing_pass_result_is_explicit_failure() -> None:
 def test_lynx_empty_inputs_are_rejected() -> None:
     with pytest.raises(VerificationError, match="required"):
         LynxVerifier(evaluator=FakeEvaluator()).verify("", "answer", ["context"])
+
+
+def test_lynx_initializes_sdk_before_creating_remote_evaluator(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, str]] = []
+    monkeypatch.setenv("PATRONUS_API_KEY", "test-key")
+    monkeypatch.setattr(
+        "backend.verification.lynx.patronus.init",
+        lambda **kwargs: calls.append(kwargs),
+    )
+
+    verifier = LynxVerifier()
+
+    assert verifier is not None
+    assert calls == [{"project_name": "AOA", "app": "rag-api", "api_key": "test-key"}]

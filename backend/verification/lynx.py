@@ -4,7 +4,9 @@ import os
 from collections.abc import Sequence
 from typing import Any
 
+import patronus
 from patronus.evals import RemoteEvaluator
+from patronus.exceptions import UninitializedError
 
 from .types import VerificationError, VerificationResult
 
@@ -15,6 +17,17 @@ class LynxVerifier:
     def __init__(self, evaluator: Any | None = None) -> None:
         if evaluator is None and not os.getenv("PATRONUS_API_KEY"):
             raise VerificationError("PATRONUS_API_KEY is not configured.")
+        if evaluator is None:
+            try:
+                patronus.init(
+                    project_name=os.getenv("PATRONUS_PROJECT", "AOA"),
+                    app=os.getenv("PATRONUS_APP", "rag-api"),
+                    api_key=os.environ["PATRONUS_API_KEY"],
+                )
+            except (OSError, RuntimeError, ValueError) as exc:
+                raise VerificationError(
+                    f"Unable to initialize Patronus SDK: {exc}"
+                ) from exc
         self._evaluator = evaluator or RemoteEvaluator(
             "lynx",
             "patronus:hallucination",
@@ -36,7 +49,7 @@ class LynxVerifier:
                 task_output=answer,
                 task_context=list(retrieved_chunks),
             )
-        except (OSError, RuntimeError, ValueError) as exc:
+        except (OSError, RuntimeError, ValueError, UninitializedError) as exc:
             raise VerificationError(f"Lynx evaluation failed: {exc}") from exc
 
         passed = getattr(result, "pass_", None)
