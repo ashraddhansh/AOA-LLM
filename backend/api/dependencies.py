@@ -60,7 +60,8 @@ def build_default_services() -> ApiServices:
 
     embedder = LlamaIndexEmbedder(LocalHashEmbedding())
     store = LlamaIndexChromaStore.from_persist_dir(
-        Path(os.getenv("CHROMA_PERSIST_DIR", ".api_data/chroma"))
+        Path(os.getenv("CHROMA_PERSIST_DIR", ".api_data/chroma")),
+        collection_name=os.getenv("CHROMA_COLLECTION_NAME", "aoa_documents_local_v1"),
     )
     return ApiServices(
         ingestion=IngestionService(

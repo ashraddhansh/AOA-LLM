@@ -171,9 +171,14 @@ class LlamaIndexChromaStore:
 
     @classmethod
     def from_persist_dir(
-        cls, persist_dir: Path, collection_name: str = "aoa_documents"
+        cls, persist_dir: Path, collection_name: str = "aoa_documents_local_v1"
     ) -> "LlamaIndexChromaStore":
-        """Create a persistent local Chroma-backed LlamaIndex store."""
+        """Create a persistent local Chroma-backed LlamaIndex store.
+
+        The collection name is versioned because Chroma collections require a
+        single embedding dimension. Changing embedding providers or models
+        requires a new collection rather than mixing incompatible vectors.
+        """
         try:
             import chromadb
         except ImportError as exc:  # pragma: no cover - dependency is packaged
