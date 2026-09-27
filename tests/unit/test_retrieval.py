@@ -26,7 +26,10 @@ class FakeRetriever:
         self.top_k: int | None = None
 
     def query(
-        self, query_embedding: Sequence[float], similarity_top_k: int
+        self,
+        query_embedding: Sequence[float],
+        similarity_top_k: int,
+        filters: dict[str, str | int] | None = None,
     ) -> tuple[Sequence[str], Sequence[float]]:
         self.embedding = query_embedding
         self.top_k = similarity_top_k
@@ -63,7 +66,10 @@ def test_empty_query_is_rejected(query: str) -> None:
 def test_mismatched_store_results_are_rejected() -> None:
     class MismatchedRetriever:
         def query(
-            self, query_embedding: Sequence[float], similarity_top_k: int
+            self,
+            query_embedding: Sequence[float],
+            similarity_top_k: int,
+            filters: dict[str, str | int] | None = None,
         ) -> tuple[Sequence[str], Sequence[float]]:
             return ("chunk",), ()
 

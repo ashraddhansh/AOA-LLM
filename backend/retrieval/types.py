@@ -29,6 +29,9 @@ class VectorRetriever(Protocol):
     """Protocol for vector stores that support similarity search."""
 
     def query(
-        self, query_embedding: Sequence[float], similarity_top_k: int
+        self,
+        query_embedding: Sequence[float],
+        similarity_top_k: int,
+        filters: dict[str, str | int] | None = None,
     ) -> tuple[Sequence[str], Sequence[float]]:
         """Return chunk text and similarity scores ordered by relevance."""

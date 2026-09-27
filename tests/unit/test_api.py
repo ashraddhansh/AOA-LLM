@@ -17,16 +17,26 @@ class FakeIngestion:
 
     def __init__(self) -> None:
         self.paths: list[Path] = []
+        self.metadata: list[dict[str, str | int] | None] = []
 
-    def ingest(self, path: Path) -> IngestionResult:
+    def ingest(
+        self, path: Path, metadata: dict[str, str | int] | None = None
+    ) -> IngestionResult:
         self.paths.append(path)
+        self.metadata.append(metadata)
         return IngestionResult(source=str(path), chunk_count=1, chunks=())
 
 
 class FakeRetrieval:
     """Return one deterministic context chunk."""
 
-    def retrieve(self, query: str) -> RetrievalResult:
+    def __init__(self) -> None:
+        self.filters: dict[str, str | int] | None = None
+
+    def retrieve(
+        self, query: str, filters: dict[str, str | int] | None = None
+    ) -> RetrievalResult:
+        self.filters = filters
         return RetrievalResult(query, ("source context",), (0.8,))
 
 
@@ -46,16 +56,15 @@ class FakeVerification:
         return VerificationResult(True, True, 0.98, "Supported by context")
 
 
-def make_client() -> tuple[TestClient, FakeIngestion]:
+def make_client() -> tuple[TestClient, FakeIngestion, FakeRetrieval]:
     ingestion = FakeIngestion()
-    services = ApiServices(
-        ingestion, FakeRetrieval(), FakeGeneration(), FakeVerification()
-    )
-    return TestClient(create_app(services)), ingestion
+    retrieval = FakeRetrieval()
+    services = ApiServices(ingestion, retrieval, FakeGeneration(), FakeVerification())
+    return TestClient(create_app(services)), ingestion, retrieval
 
 
 def test_chat_creation_and_listing() -> None:
-    client, _ = make_client()
+    client, _, _ = make_client()
 
     created = client.post("/chats", json={"title": "Research"})
 
@@ -68,7 +77,7 @@ def test_chat_creation_and_listing() -> None:
 
 
 def test_upload_and_question_use_injected_services() -> None:
-    client, ingestion = make_client()
+    client, ingestion, retrieval = make_client()
     chat_id = client.post("/chats", json={}).json()["id"]
 
     upload = client.post(
@@ -78,6 +87,7 @@ def test_upload_and_question_use_injected_services() -> None:
     assert upload.status_code == 200
     assert upload.json() == {"files": ["notes.txt"], "chunk_count": 1}
     assert len(ingestion.paths) == 1
+    assert ingestion.metadata == [{"chat_id": chat_id}]
     assert not ingestion.paths[0].exists()
 
     answer = client.post(f"/chats/{chat_id}/questions", json={"query": "What is this?"})
@@ -85,6 +95,7 @@ def test_upload_and_question_use_injected_services() -> None:
     assert answer.json()["answer"] == "grounded answer"
     assert answer.json()["sources"] == [{"text": "source context", "score": 0.8}]
     assert answer.json()["verification"]["passed"] is True
+    assert retrieval.filters == {"chat_id": chat_id}
 
 
 def test_unknown_chat_and_unconfigured_services_are_safe() -> None:
@@ -97,7 +108,7 @@ def test_unknown_chat_and_unconfigured_services_are_safe() -> None:
 
 
 def test_cors_header_is_present() -> None:
-    client, _ = make_client()
+    client, _, _ = make_client()
 
     response = client.get("/health", headers={"Origin": "http://localhost:5173"})
 

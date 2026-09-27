@@ -6,7 +6,7 @@ current Groq-compatible setup uses the local LlamaIndex hash embedder with
 256-dimensional vectors, so it stores new documents in:
 
 ```text
-aoa_documents_local_v1
+aoa_documents_local_v2
 ```
 
 The collection can be changed with `CHROMA_COLLECTION_NAME`. Do not point the

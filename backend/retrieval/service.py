@@ -18,7 +18,9 @@ class RetrievalService:
         self._vector_store = vector_store
         self._top_k = top_k
 
-    def retrieve(self, query: str) -> RetrievalResult:
+    def retrieve(
+        self, query: str, filters: dict[str, str | int] | None = None
+    ) -> RetrievalResult:
         """Return up to ``top_k`` chunks and their aligned similarity scores."""
         if not query.strip():
             raise RetrievalError(
@@ -30,7 +32,9 @@ class RetrievalService:
             raise RetrievalError("Query embedder returned an empty vector.")
 
         try:
-            chunks, scores = self._vector_store.query(query_embedding, self._top_k)
+            chunks, scores = self._vector_store.query(
+                query_embedding, self._top_k, filters
+            )
         except (OSError, RuntimeError, ValueError) as exc:
             raise RetrievalError(f"Similarity search failed: {exc}") from exc
 

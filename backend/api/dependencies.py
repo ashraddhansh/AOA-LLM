@@ -27,14 +27,18 @@ from backend.verification.types import VerificationResult
 class IngestionPipeline(Protocol):
     """Minimal ingestion interface required by the API."""
 
-    def ingest(self, path: Path) -> IngestionResult:
+    def ingest(
+        self, path: Path, metadata: dict[str, str | int] | None = None
+    ) -> IngestionResult:
         """Ingest a file."""
 
 
 class RetrievalPipeline(Protocol):
     """Minimal retrieval interface required by the API."""
 
-    def retrieve(self, query: str) -> RetrievalResult:
+    def retrieve(
+        self, query: str, filters: dict[str, str | int] | None = None
+    ) -> RetrievalResult:
         """Retrieve context."""
 
 
@@ -77,7 +81,7 @@ def build_default_services() -> ApiServices:
     embedder = LlamaIndexEmbedder(LocalHashEmbedding())
     store = LlamaIndexChromaStore.from_persist_dir(
         Path(os.getenv("CHROMA_PERSIST_DIR", ".api_data/chroma")),
-        collection_name=os.getenv("CHROMA_COLLECTION_NAME", "aoa_documents_local_v1"),
+        collection_name=os.getenv("CHROMA_COLLECTION_NAME", "aoa_documents_local_v2"),
     )
     return ApiServices(
         ingestion=IngestionService(

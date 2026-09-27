@@ -38,7 +38,9 @@ class IngestionService:
         self._overlap = overlap
         self._chunker = chunker or LlamaIndexChunker(chunk_size, overlap)
 
-    def ingest(self, path: Path) -> IngestionResult:
+    def ingest(
+        self, path: Path, metadata: dict[str, str | int] | None = None
+    ) -> IngestionResult:
         """Ingest ``path`` or raise a clear error without partial persistence."""
         pages = tuple(self._loader.load(path))
         chunks = self._chunker(pages, path, self._chunk_size, self._overlap)
@@ -52,15 +54,22 @@ class IngestionService:
                 raise IngestionError(
                     f"Embedder returned an empty vector for {chunk.chunk_id}."
                 )
+            chunk_metadata: dict[str, str | int] = {
+                "source": chunk.source,
+                "page": chunk.page_number,
+                "chunk_id": chunk.chunk_id,
+            }
+            if metadata:
+                chunk_metadata.update(metadata)
+                if "chat_id" in metadata:
+                    chunk_metadata["chunk_id"] = (
+                        f"{metadata['chat_id']}:{chunk.chunk_id}"
+                    )
             embedded.append(
                 EmbeddedChunk(
                     text=chunk.text,
                     embedding=vector,
-                    metadata={
-                        "source": chunk.source,
-                        "page": chunk.page_number,
-                        "chunk_id": chunk.chunk_id,
-                    },
+                    metadata=chunk_metadata,
                 )
             )
         self._vector_store.add(embedded)

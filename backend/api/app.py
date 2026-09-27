@@ -107,7 +107,9 @@ def create_app(
                 content = await upload.read()
                 app.state.upload_dir.mkdir(parents=True, exist_ok=True)
                 temp_path.write_bytes(content)
-                result = pipeline.ingestion.ingest(temp_path)
+                result = pipeline.ingestion.ingest(
+                    temp_path, metadata={"chat_id": chat_id}
+                )
             except (
                 IngestionError,
                 ChromaError,
@@ -141,7 +143,9 @@ def create_app(
         if chat is None:
             raise HTTPException(status_code=404, detail="Chat not found")
         try:
-            retrieved = pipeline.retrieval.retrieve(payload.query)
+            retrieved = pipeline.retrieval.retrieve(
+                payload.query, filters={"chat_id": chat_id}
+            )
             answer = pipeline.generation.generate(
                 payload.query, retrieved.retrieved_chunks
             )

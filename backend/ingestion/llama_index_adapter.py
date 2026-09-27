@@ -14,7 +14,11 @@ from llama_index.core import SimpleDirectoryReader
 from llama_index.core.embeddings import BaseEmbedding
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.schema import BaseNode, TextNode
-from llama_index.core.vector_stores import VectorStoreQuery
+from llama_index.core.vector_stores import (
+    MetadataFilter,
+    MetadataFilters,
+    VectorStoreQuery,
+)
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
 from .types import (
@@ -151,15 +155,27 @@ class LlamaIndexChromaStore:
             self._store.add(nodes)
 
     def query(
-        self, query_embedding: Sequence[float], similarity_top_k: int
+        self,
+        query_embedding: Sequence[float],
+        similarity_top_k: int,
+        filters: dict[str, str | int] | None = None,
     ) -> tuple[Sequence[str], Sequence[float]]:
         """Run Chroma similarity search and return text with aligned scores."""
         if similarity_top_k <= 0:
             raise ValueError("similarity_top_k must be greater than zero")
+        metadata_filters = None
+        if filters:
+            metadata_filters = MetadataFilters(
+                filters=[
+                    MetadataFilter(key=key, value=value)
+                    for key, value in filters.items()
+                ]
+            )
         result = self._store.query(
             VectorStoreQuery(
                 query_embedding=list(query_embedding),
                 similarity_top_k=similarity_top_k,
+                filters=metadata_filters,
             )
         )
         nodes = result.nodes or ()
@@ -171,7 +187,7 @@ class LlamaIndexChromaStore:
 
     @classmethod
     def from_persist_dir(
-        cls, persist_dir: Path, collection_name: str = "aoa_documents_local_v1"
+        cls, persist_dir: Path, collection_name: str = "aoa_documents_local_v2"
     ) -> "LlamaIndexChromaStore":
         """Create a persistent local Chroma-backed LlamaIndex store.
 
