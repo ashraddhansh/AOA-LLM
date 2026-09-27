@@ -46,7 +46,10 @@ def create_app(
         app.state.services = build_default_services()
     app.state.upload_dir = Path(".api_uploads")
 
-    origins = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
+    origins = os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173",
+    ).split(",")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[origin.strip() for origin in origins if origin.strip()],

@@ -72,6 +72,7 @@ function App() {
   const [search, setSearch] = useState("");
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isUploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
   const activeChat = chats.find((chat) => chat.id === activeId) ?? chats[0];
 
@@ -221,6 +222,7 @@ function App() {
     const files = Array.from(event.target.files ?? []);
     if (!files.length) return;
     setUploading(true);
+    setError("");
     if (apiBaseUrl) {
       const body = new FormData();
       files.forEach((file) => body.append("files", file));
@@ -232,6 +234,9 @@ function App() {
         if (!response.ok) throw new Error("Upload failed");
       } catch {
         setUploading(false);
+        setError(
+          "Upload failed. Confirm the FastAPI server is running and that GEMINI_API_KEY is configured.",
+        );
         return;
       }
     }
@@ -275,6 +280,7 @@ function App() {
         </header>
 
         <section className="content">
+          {error ? <div className="api-error" role="alert">{error}</div> : null}
           <div className="document-strip">
             <div className="strip-heading"><BookOpen size={18} /><div><strong>Source documents</strong><span>{activeChat?.documents.length ? `${activeChat.documents.length} files in this chat` : "Add documents to get started"}</span></div></div>
             <input ref={fileInput} type="file" multiple accept=".pdf,.docx,.txt,.md,.csv" hidden onChange={uploadDocuments} />
