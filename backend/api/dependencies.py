@@ -61,7 +61,9 @@ def build_default_services() -> ApiServices:
 
     embedder = LlamaIndexEmbedder(
         GeminiEmbedding(
-            model_name=os.getenv("GEMINI_EMBEDDING_MODEL", "models/embedding-001"),
+            model_name=os.getenv(
+                "GEMINI_EMBEDDING_MODEL", "models/gemini-embedding-001"
+            ),
             api_key=api_key,
         )
     )

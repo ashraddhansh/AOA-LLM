@@ -89,7 +89,11 @@ function App() {
         setChats(nextChats);
         setActiveId(nextChats[0].id);
       })
-      .catch(() => undefined);
+      .catch(() => {
+        setError(
+          "The FastAPI service is unavailable. Start it on http://localhost:8000 and reload.",
+        );
+      });
   }, []);
 
   const createRemoteChat = async () => {

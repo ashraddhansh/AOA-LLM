@@ -1,12 +1,15 @@
 """FastAPI application factory and route handlers."""
 
+import logging
 import os
 import re
 from pathlib import Path
 from uuid import uuid4
 
+from chromadb.errors import ChromaError
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from google.api_core.exceptions import GoogleAPIError
 
 from backend.generation.types import GenerationError
 from backend.ingestion.types import IngestionError
@@ -22,6 +25,8 @@ from .schemas import (
     SourceReference,
 )
 from .state import ChatState, InMemoryChatStore
+
+logger = logging.getLogger(__name__)
 
 
 def _summary(chat: ChatState) -> ChatSummary:
@@ -102,7 +107,15 @@ def create_app(
                 app.state.upload_dir.mkdir(parents=True, exist_ok=True)
                 temp_path.write_bytes(content)
                 result = pipeline.ingestion.ingest(temp_path)
-            except IngestionError as exc:
+            except (
+                IngestionError,
+                ChromaError,
+                GoogleAPIError,
+                OSError,
+                RuntimeError,
+                ValueError,
+            ) as exc:
+                logger.exception("Document ingestion failed for chat %s", chat_id)
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
             finally:
                 await upload.close()
