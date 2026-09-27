@@ -5,9 +5,9 @@ from typing import Any
 import pytest
 
 from backend.generation import (
-    GeminiGenerator,
     GenerationError,
     GenerationService,
+    GroqGenerator,
     build_grounded_prompt,
 )
 
@@ -55,27 +55,26 @@ def test_empty_model_response_is_rejected() -> None:
         GenerationService(FakeGenerator(" ")).generate("question", ["context"])
 
 
-def test_gemini_adapter_calls_configured_model() -> None:
+def test_groq_adapter_calls_configured_model() -> None:
     class Response:
-        text = "Gemini answer"
+        def raise_for_status(self) -> None:
+            return None
 
-    class Models:
-        def __init__(self) -> None:
-            self.arguments: dict[str, Any] = {}
-
-        def generate_content(self, **kwargs: Any) -> Response:
-            self.arguments = kwargs
-            return Response()
+        def json(self) -> dict[str, Any]:
+            return {"choices": [{"message": {"content": "Groq answer"}}]}
 
     class Client:
         def __init__(self) -> None:
-            self.models = Models()
+            self.arguments: dict[str, Any] = {}
+
+        def post(self, path: str, **kwargs: Any) -> Response:
+            self.arguments = {"path": path, **kwargs}
+            return Response()
 
     client = Client()
-    result = GeminiGenerator(client=client, model="gemini-test").generate("prompt")
+    result = GroqGenerator(client=client, model="groq-test").generate("prompt")
 
-    assert result == "Gemini answer"
-    assert client.models.arguments == {
-        "model": "gemini-test",
-        "contents": "prompt",
-    }
+    assert result == "Groq answer"
+    assert client.arguments["path"] == "/chat/completions"
+    assert client.arguments["json"]["model"] == "groq-test"
+    assert client.arguments["json"]["messages"][1]["content"] == "prompt"

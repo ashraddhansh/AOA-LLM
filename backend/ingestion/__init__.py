@@ -5,6 +5,7 @@ from .llama_index_adapter import (
     LlamaIndexChunker,
     LlamaIndexDocumentLoader,
     LlamaIndexEmbedder,
+    LocalHashEmbedding,
 )
 from .service import IngestionService
 from .types import (
@@ -25,5 +26,6 @@ __all__ = [
     "LlamaIndexChunker",
     "LlamaIndexDocumentLoader",
     "LlamaIndexEmbedder",
+    "LocalHashEmbedding",
     "UnsupportedFileTypeError",
 ]

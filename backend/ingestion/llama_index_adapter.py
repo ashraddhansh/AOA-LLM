@@ -5,6 +5,8 @@ parsing, token-aware splitting, embedding, and vector persistence to
 LlamaIndex integrations.
 """
 
+import hashlib
+import math
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -99,6 +101,33 @@ class LlamaIndexEmbedder:
     def embed(self, text: str) -> tuple[float, ...]:
         """Embed text using the configured LlamaIndex model."""
         return tuple(self._model.get_text_embedding(text))
+
+
+class LocalHashEmbedding(BaseEmbedding):
+    """Deterministic local embedding model for document and query vectors."""
+
+    def __init__(self, dimensions: int = 256) -> None:
+        super().__init__(model_name="local-hash")
+        if dimensions <= 0:
+            raise ValueError("dimensions must be greater than zero")
+        self._dimensions = dimensions
+
+    def _get_text_embedding(self, text: str) -> list[float]:
+        return self._embed(text)
+
+    def _get_query_embedding(self, query: str) -> list[float]:
+        return self._embed(query)
+
+    async def _aget_query_embedding(self, query: str) -> list[float]:
+        return self._embed(query)
+
+    def _embed(self, text: str) -> list[float]:
+        vector = [0.0] * self._dimensions
+        for token in text.lower().split():
+            digest = hashlib.blake2b(token.encode("utf-8"), digest_size=8).digest()
+            vector[int.from_bytes(digest, "big") % self._dimensions] += 1.0
+        norm = math.sqrt(sum(value * value for value in vector))
+        return [value / norm for value in vector] if norm else vector
 
 
 class LlamaIndexChromaStore:

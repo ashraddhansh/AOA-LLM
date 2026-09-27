@@ -239,7 +239,7 @@ function App() {
       } catch {
         setUploading(false);
         setError(
-          "Upload failed. Confirm the FastAPI server is running and that GEMINI_API_KEY is configured.",
+          "Upload failed. Confirm the FastAPI server is running and that GROQ_API_KEY is configured.",
         );
         return;
       }

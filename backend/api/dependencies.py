@@ -8,12 +8,13 @@ from typing import Protocol
 
 from fastapi import HTTPException, Request
 
-from backend.generation.gemini import GeminiGenerator
+from backend.generation.groq import GroqGenerator
 from backend.generation.service import GenerationService
 from backend.generation.types import GenerationResult
 from backend.ingestion.llama_index_adapter import (
     LlamaIndexChromaStore,
     LlamaIndexEmbedder,
+    LocalHashEmbedding,
 )
 from backend.ingestion.service import IngestionService
 from backend.ingestion.types import IngestionResult
@@ -52,21 +53,12 @@ class ApiServices:
 
 
 def build_default_services() -> ApiServices:
-    """Build the production pipeline using Gemini embeddings and Chroma."""
-    api_key = os.getenv("GEMINI_API_KEY")
+    """Build the production pipeline using local embeddings, Groq, and Chroma."""
+    api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
-        raise RuntimeError("GEMINI_API_KEY is required to configure the RAG pipeline.")
+        raise RuntimeError("GROQ_API_KEY is required to configure the RAG pipeline.")
 
-    from llama_index.embeddings.gemini import GeminiEmbedding
-
-    embedder = LlamaIndexEmbedder(
-        GeminiEmbedding(
-            model_name=os.getenv(
-                "GEMINI_EMBEDDING_MODEL", "models/gemini-embedding-001"
-            ),
-            api_key=api_key,
-        )
-    )
+    embedder = LlamaIndexEmbedder(LocalHashEmbedding())
     store = LlamaIndexChromaStore.from_persist_dir(
         Path(os.getenv("CHROMA_PERSIST_DIR", ".api_data/chroma"))
     )
@@ -78,9 +70,9 @@ def build_default_services() -> ApiServices:
         ),
         retrieval=RetrievalService(embedder=embedder, vector_store=store),
         generation=GenerationService(
-            GeminiGenerator(
+            GroqGenerator(
                 api_key=api_key,
-                model=os.getenv("GEMINI_MODEL"),
+                model=os.getenv("GROQ_MODEL"),
             )
         ),
     )

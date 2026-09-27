@@ -18,7 +18,7 @@ Core pipeline: **ingest → retrieve → generate → verify (Lynx) → classify
 | Orchestration | LangGraph |
 | Retrieval/indexing | LlamaIndex |
 | Vector DB | ChromaDB (dev), Qdrant/pgvector (prod) |
-| Generation LLM | Google Gemini API |
+| Generation LLM | Groq API |
 | Hallucination verification | Patronus Lynx API |
 | Web verification | Tavily / SerpAPI |
 | Frontend | React / Next.js |
@@ -45,7 +45,7 @@ source .venv/bin/activate
 - Never commit `.venv/` — it is git-ignored.
 - Run all commands through `uv run <command>` unless the venv is already activated in the current shell, to guarantee the correct interpreter and dependency versions are used.
 - Required environment variables (never hardcode or commit actual values — use `.env`, which is git-ignored, and update `.env.example` when adding new ones):
-  - `GEMINI_API_KEY`
+  - `GROQ_API_KEY`
   - `PATRONUS_API_KEY`
   - `WEB_SEARCH_API_KEY`
   - `VECTOR_DB_URL` (if not using local Chroma)
@@ -57,7 +57,7 @@ aoa/
 ├── backend/
 │   ├── ingestion/          # Document parsing, chunking, embedding
 │   ├── retrieval/          # Vector search against the index
-│   ├── generation/         # Prompt construction + Gemini calls
+│   ├── generation/         # Prompt construction + Groq calls
 │   ├── verification/       # Lynx integration
 │   ├── remediation/        # Web search fallback + regeneration
 │   ├── orchestrator/       # LangGraph state graph definition
@@ -94,14 +94,14 @@ Agents must ensure the following before considering any change complete:
 
 ### 6.1 What must be tested
 
-- **Unit tests** for each pipeline module in isolation (ingestion, retrieval, generation, verification, classification, remediation) using mocked external API calls (Gemini, Lynx, web search) — no real network calls in unit tests.
+- **Unit tests** for each pipeline module in isolation (ingestion, retrieval, generation, verification, classification, remediation) using mocked external API calls (Groq, Lynx, web search) — no real network calls in unit tests.
 - **Integration tests** for the full LangGraph pipeline end-to-end, using a small fixture document set and known question/answer pairs, still with mocked external APIs.
 - **Failure-path tests** are mandatory, not optional — every remediation branch must have a test:
   - Lynx pass → direct return
   - Lynx fail + low retrieval score → web search branch triggered
   - Lynx fail + healthy retrieval score → regeneration branch triggered
   - Regeneration still fails after retry → fallback/abstain response returned
-  - External API failure/timeout (Gemini, Lynx, web search) → safe fallback, not a crash or silent pass
+  - External API failure/timeout (Groq, Lynx, web search) → safe fallback, not a crash or silent pass
 - **Error handling tests** for malformed uploads, empty documents, and unsupported file types.
 
 ### 6.2 How to run tests
@@ -146,7 +146,7 @@ Before marking any task complete, confirm:
 ## 8. What Agents Should NOT Do
 
 - Do not install packages with raw `pip` — always use `uv add`.
-- Do not make real calls to Gemini, Patronus, or web search APIs inside unit tests — use mocks/fixtures.
+- Do not make real calls to Groq, Patronus, or web search APIs inside unit tests — use mocks/fixtures.
 - Do not merge generation and verification logic into a single function — they must remain separately testable stages per the LLD architecture.
 - Do not silently swallow exceptions from external API calls — every failure path must resolve to a defined state (`retrieval_gap`, `bad_generation`, or an explicit fallback/abstain response), never an unhandled crash or a silently returned unverified answer.
 - Do not commit `.venv/`, `.env`, or any generated vector DB data files.

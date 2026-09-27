@@ -9,7 +9,6 @@ from uuid import uuid4
 from chromadb.errors import ChromaError
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from google.api_core.exceptions import GoogleAPIError
 
 from backend.generation.types import GenerationError
 from backend.ingestion.types import IngestionError
@@ -47,7 +46,7 @@ def create_app(
     app = FastAPI(title="AOA API", version="0.1.0")
     app.state.chat_store = chat_store or InMemoryChatStore()
     app.state.services = services
-    if services is None and os.getenv("GEMINI_API_KEY"):
+    if services is None and os.getenv("GROQ_API_KEY"):
         app.state.services = build_default_services()
     app.state.upload_dir = Path(".api_uploads")
 
@@ -110,7 +109,6 @@ def create_app(
             except (
                 IngestionError,
                 ChromaError,
-                GoogleAPIError,
                 OSError,
                 RuntimeError,
                 ValueError,
