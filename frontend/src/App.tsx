@@ -14,7 +14,18 @@ import {
   X,
 } from "lucide-react";
 
-type Message = { id: string; role: "user" | "assistant"; content: string };
+type Verification = {
+  passed: boolean;
+  verified: boolean;
+  score: number | null;
+  explanation: string | null;
+};
+type Message = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  verification?: Verification;
+};
 type Chat = {
   id: string;
   title: string;
@@ -64,6 +75,43 @@ const fromApiChat = (chat: ApiChat): Chat => ({
   documents: chat.documents,
   messages: [],
 });
+
+function VerificationCard({ result }: { result?: Verification }) {
+  if (!result) {
+    return <small className="verified"><Check size={12} /> Verification pending</small>;
+  }
+
+  const status = !result.verified
+    ? "Unverified"
+    : result.passed
+      ? "Passed"
+      : "Failed";
+  const statusClass = !result.verified
+    ? "verification-unknown"
+    : result.passed
+      ? "verification-pass"
+      : "verification-fail";
+  const score =
+    result.score === null ? "—" : `${Math.round(result.score * 100)}%`;
+
+  return (
+    <div className={`verification-card ${statusClass}`}>
+      <div className="verification-header">
+        <span className="verification-title">
+          <ShieldCheck size={14} /> Lynx verification
+        </span>
+        <strong>{status}</strong>
+      </div>
+      <div className="verification-meta">
+        <span>Faithfulness score</span>
+        <b>{score}</b>
+      </div>
+      {result.explanation ? (
+        <p className="verification-explanation">{result.explanation}</p>
+      ) : null}
+    </div>
+  );
+}
 
 function App() {
   const [chats, setChats] = useState<Chat[]>(initialChats);
@@ -181,6 +229,7 @@ function App() {
         const data = (await response.json()) as {
           answer: string;
           sources: { text: string; score: number }[];
+          verification: Verification;
         };
         updateActiveChat((chat) => ({
           ...chat,
@@ -190,6 +239,7 @@ function App() {
               id: `assistant-${Date.now()}`,
               role: "assistant",
               content: data.answer,
+              verification: data.verification,
             },
           ],
         }));
@@ -299,7 +349,7 @@ function App() {
           {activeChat?.documents.length ? <div className="document-list">{activeChat.documents.map((document) => <span className="document-chip" key={document}><FileText size={14} />{document}<Check size={13} /></span>)}</div> : null}
 
           <div className="conversation">
-            {activeChat?.messages.length === 0 ? <div className="empty-state"><div className="empty-icon"><Sparkles size={25} /></div><h2>Ask your documents anything</h2><p>Upload a source above, then ask a question. AOA retrieves relevant passages and abstains when the answer cannot be verified.</p><div className="suggestions"><button onClick={() => setQuery("Summarize the key points")}>Summarize the key points <ArrowUp size={14} /></button><button onClick={() => setQuery("What are the main risks?")}>What are the main risks? <ArrowUp size={14} /></button></div></div> : activeChat?.messages.map((message) => <article className={`message ${message.role}`} key={message.id}><div className="avatar">{message.role === "assistant" ? <ShieldCheck size={17} /> : "You"}</div><div><span className="message-label">{message.role === "assistant" ? "AOA" : "You"}</span><p>{message.content}</p>{message.role === "assistant" ? <small className="verified"><Check size={12} /> Based on retrieved context</small> : null}</div></article>)}
+            {activeChat?.messages.length === 0 ? <div className="empty-state"><div className="empty-icon"><Sparkles size={25} /></div><h2>Ask your documents anything</h2><p>Upload a source above, then ask a question. AOA retrieves relevant passages and abstains when the answer cannot be verified.</p><div className="suggestions"><button onClick={() => setQuery("Summarize the key points")}>Summarize the key points <ArrowUp size={14} /></button><button onClick={() => setQuery("What are the main risks?")}>What are the main risks? <ArrowUp size={14} /></button></div></div> : activeChat?.messages.map((message) => <article className={`message ${message.role}`} key={message.id}><div className="avatar">{message.role === "assistant" ? <ShieldCheck size={17} /> : "You"}</div><div><span className="message-label">{message.role === "assistant" ? "AOA" : "You"}</span><p>{message.content}</p>{message.role === "assistant" ? <VerificationCard result={message.verification} /> : null}</div></article>)}
           </div>
 
           <form className="composer" onSubmit={sendQuestion}><textarea value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendQuestion(event); } }} placeholder="Ask a question about your documents..." rows={1} /><button type="submit" disabled={!query.trim()} aria-label="Send question"><ArrowUp size={19} /></button><span className="composer-hint">Enter to send · Shift + Enter for a new line</span></form>
