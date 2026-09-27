@@ -12,6 +12,7 @@ from llama_index.core import SimpleDirectoryReader
 from llama_index.core.embeddings import BaseEmbedding
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.schema import BaseNode, TextNode
+from llama_index.core.vector_stores import VectorStoreQuery
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
 from .types import (
@@ -119,6 +120,25 @@ class LlamaIndexChromaStore:
         ]
         if nodes:
             self._store.add(nodes)
+
+    def query(
+        self, query_embedding: Sequence[float], similarity_top_k: int
+    ) -> tuple[Sequence[str], Sequence[float]]:
+        """Run Chroma similarity search and return text with aligned scores."""
+        if similarity_top_k <= 0:
+            raise ValueError("similarity_top_k must be greater than zero")
+        result = self._store.query(
+            VectorStoreQuery(
+                query_embedding=list(query_embedding),
+                similarity_top_k=similarity_top_k,
+            )
+        )
+        nodes = result.nodes or ()
+        similarities = result.similarities or ()
+        return (
+            tuple(node.get_content() for node in nodes),
+            tuple(float(score) for score in similarities),
+        )
 
     @classmethod
     def from_persist_dir(
