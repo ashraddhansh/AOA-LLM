@@ -11,3 +11,5 @@ wheels/
 .env
 frontend/node_modules/
 frontend/dist/
+.api_data/
+.api_uploads/
