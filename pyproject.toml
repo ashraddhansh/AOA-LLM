@@ -1,0 +1,37 @@
+[project]
+name = "aoa-backend"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "Arpit Shraddhansh", email = "ashraddhansh@protonmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "chromadb>=1.5.9",
+    "llama-index-core>=0.14.25",
+    "llama-index-readers-file>=0.7.0",
+    "llama-index-vector-stores-chroma>=0.6.0",
+]
+
+[project.scripts]
+aoa-backend = "aoa_backend:main"
+
+[build-system]
+requires = ["uv_build>=0.12.19,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "black>=26.5.1",
+    "mypy>=2.3.1",
+    "pytest>=9.1.1",
+    "ruff>=0.16.9",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.mypy]
+exclude = ["tests"]
+check_untyped_defs = true
