@@ -12,7 +12,7 @@ from backend.generation.types import GenerationError
 from backend.ingestion.types import IngestionError
 from backend.retrieval.types import RetrievalError
 
-from .dependencies import ApiServices, get_services
+from .dependencies import ApiServices, build_default_services, get_services
 from .schemas import (
     ChatSummary,
     CreateChatRequest,
@@ -42,6 +42,8 @@ def create_app(
     app = FastAPI(title="AOA API", version="0.1.0")
     app.state.chat_store = chat_store or InMemoryChatStore()
     app.state.services = services
+    if services is None and os.getenv("GEMINI_API_KEY"):
+        app.state.services = build_default_services()
     app.state.upload_dir = Path(".api_uploads")
 
     origins = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")

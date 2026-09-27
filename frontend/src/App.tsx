@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUp,
   BookOpen,
@@ -49,6 +49,22 @@ const initialChats: Chat[] = [
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "");
 
+type ApiChat = {
+  id: string;
+  title: string;
+  updated_at: string;
+  documents: string[];
+  message_count: number;
+};
+
+const fromApiChat = (chat: ApiChat): Chat => ({
+  id: chat.id,
+  title: chat.title,
+  updatedAt: new Date(chat.updated_at).toLocaleDateString(),
+  documents: chat.documents,
+  messages: [],
+});
+
 function App() {
   const [chats, setChats] = useState<Chat[]>(initialChats);
   const [activeId, setActiveId] = useState(initialChats[0].id);
@@ -58,6 +74,35 @@ function App() {
   const [isUploading, setUploading] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const activeChat = chats.find((chat) => chat.id === activeId) ?? chats[0];
+
+  useEffect(() => {
+    if (!apiBaseUrl) return;
+    void fetch(`${apiBaseUrl}/chats`)
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Unable to load chats");
+        return (await response.json()) as ApiChat[];
+      })
+      .then((remoteChats) => {
+        if (!remoteChats.length) return createRemoteChat();
+        const nextChats = remoteChats.map(fromApiChat);
+        setChats(nextChats);
+        setActiveId(nextChats[0].id);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  const createRemoteChat = async () => {
+    if (!apiBaseUrl) return;
+    const response = await fetch(`${apiBaseUrl}/chats`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "New conversation" }),
+    });
+    if (!response.ok) throw new Error("Unable to create chat");
+    const chat = fromApiChat((await response.json()) as ApiChat);
+    setChats([chat]);
+    setActiveId(chat.id);
+  };
 
   const visibleChats = useMemo(
     () =>
@@ -73,7 +118,16 @@ function App() {
     );
   };
 
-  const createChat = () => {
+  const createChat = async () => {
+    if (apiBaseUrl) {
+      try {
+        await createRemoteChat();
+        setSidebarOpen(false);
+        return;
+      } catch {
+        return;
+      }
+    }
     const id = `chat-${Date.now()}`;
     setChats((current) => [
       {
@@ -114,17 +168,36 @@ function App() {
           body: JSON.stringify({ query: question }),
         });
         if (!response.ok) throw new Error("Question request failed");
-        const data = (await response.json()) as { answer: string };
+        const data = (await response.json()) as {
+          answer: string;
+          sources: { text: string; score: number }[];
+        };
         updateActiveChat((chat) => ({
           ...chat,
           messages: [
             ...chat.messages,
-            { id: `assistant-${Date.now()}`, role: "assistant", content: data.answer },
+            {
+              id: `assistant-${Date.now()}`,
+              role: "assistant",
+              content: data.answer,
+            },
           ],
         }));
         return;
       } catch {
-        // Keep the local abstention visible if the API is unavailable.
+        updateActiveChat((chat) => ({
+          ...chat,
+          messages: [
+            ...chat.messages,
+            {
+              id: `assistant-${Date.now()}`,
+              role: "assistant",
+              content:
+                "I couldn’t reach the RAG service. Check that the FastAPI backend is running and try again.",
+            },
+          ],
+        }));
+        return;
       }
     }
 
@@ -152,12 +225,14 @@ function App() {
       const body = new FormData();
       files.forEach((file) => body.append("files", file));
       try {
-        await fetch(`${apiBaseUrl}/chats/${activeId}/documents`, {
+        const response = await fetch(`${apiBaseUrl}/chats/${activeId}/documents`, {
           method: "POST",
           body,
         });
+        if (!response.ok) throw new Error("Upload failed");
       } catch {
-        // The local list still gives immediate feedback in demo mode.
+        setUploading(false);
+        return;
       }
     }
     await new Promise((resolve) => window.setTimeout(resolve, 350));
