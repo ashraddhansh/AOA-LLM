@@ -21,7 +21,7 @@ class GroqGenerator:
         if not key and client is None:
             raise GenerationError("GROQ_API_KEY is not configured.")
         self._api_key = key
-        self._model: str = model or os.getenv("GROQ_MODEL") or "llama-3.3-70b-versatile"
+        self._model: str = model or os.getenv("GROQ_MODEL") or "openai/gpt-oss-20b"
         self._client = client or httpx.Client(
             base_url="https://api.groq.com/openai/v1",
             headers={
@@ -50,6 +50,17 @@ class GroqGenerator:
             )
             response.raise_for_status()
             payload = response.json()
+        except httpx.HTTPStatusError as exc:
+            detail = exc.response.text[:500]
+            if exc.response.status_code == 404:
+                raise GenerationError(
+                    f"Groq model '{self._model}' was not found or is unavailable. "
+                    "Set GROQ_MODEL to an active chat model from Groq's model list. "
+                    f"Groq response: {detail}"
+                ) from exc
+            raise GenerationError(
+                f"Groq request failed with HTTP {exc.response.status_code}: {detail}"
+            ) from exc
         except httpx.HTTPError as exc:
             raise GenerationError(f"Groq request failed: {exc}") from exc
         except (TypeError, ValueError, KeyError) as exc:

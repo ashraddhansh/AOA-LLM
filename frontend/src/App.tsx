@@ -172,7 +172,12 @@ function App() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query: question }),
         });
-        if (!response.ok) throw new Error("Question request failed");
+        if (!response.ok) {
+          const detail = (await response.json().catch(() => null)) as {
+            detail?: string;
+          } | null;
+          throw new Error(detail?.detail || "Question request failed");
+        }
         const data = (await response.json()) as {
           answer: string;
           sources: { text: string; score: number }[];
@@ -189,7 +194,7 @@ function App() {
           ],
         }));
         return;
-      } catch {
+      } catch (requestError) {
         updateActiveChat((chat) => ({
           ...chat,
           messages: [
@@ -197,8 +202,9 @@ function App() {
             {
               id: `assistant-${Date.now()}`,
               role: "assistant",
-              content:
-                "I couldn’t reach the RAG service. Check that the FastAPI backend is running and try again.",
+              content: requestError instanceof Error
+                ? requestError.message
+                : "The RAG service could not answer this question.",
             },
           ],
         }));
