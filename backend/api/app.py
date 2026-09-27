@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.generation.types import GenerationError
 from backend.ingestion.types import IngestionError
 from backend.retrieval.types import RetrievalError
+from backend.verification.types import VerificationError
 
 from .dependencies import ApiServices, build_default_services, get_services
 from .schemas import (
@@ -22,6 +23,7 @@ from .schemas import (
     QuestionRequest,
     QuestionResponse,
     SourceReference,
+    VerificationResponse,
 )
 from .state import ChatState, InMemoryChatStore
 
@@ -143,7 +145,12 @@ def create_app(
             answer = pipeline.generation.generate(
                 payload.query, retrieved.retrieved_chunks
             )
-        except (RetrievalError, GenerationError) as exc:
+            verification = pipeline.verification.verify(
+                payload.query,
+                answer.answer,
+                retrieved.retrieved_chunks,
+            )
+        except (RetrievalError, GenerationError, VerificationError) as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         chat.message_count += 2
         app.state.chat_store.touch(chat)
@@ -154,7 +161,15 @@ def create_app(
             )
         ]
         return QuestionResponse(
-            query=payload.query, answer=answer.answer, sources=sources
+            query=payload.query,
+            answer=answer.answer,
+            sources=sources,
+            verification=VerificationResponse(
+                passed=verification.passed,
+                verified=verification.verified,
+                score=verification.score,
+                explanation=verification.explanation,
+            ),
         )
 
     return app

@@ -20,6 +20,8 @@ from backend.ingestion.service import IngestionService
 from backend.ingestion.types import IngestionResult
 from backend.retrieval.service import RetrievalService
 from backend.retrieval.types import RetrievalResult
+from backend.verification.lynx import LynxVerifier
+from backend.verification.types import VerificationResult
 
 
 class IngestionPipeline(Protocol):
@@ -43,6 +45,15 @@ class GenerationPipeline(Protocol):
         """Generate an answer."""
 
 
+class VerificationPipeline(Protocol):
+    """Minimal faithfulness verification interface required by the API."""
+
+    def verify(
+        self, query: str, answer: str, retrieved_chunks: Sequence[str]
+    ) -> VerificationResult:
+        """Verify an answer against retrieved context."""
+
+
 @dataclass(frozen=True)
 class ApiServices:
     """Pipeline services used by API endpoints."""
@@ -50,6 +61,7 @@ class ApiServices:
     ingestion: IngestionPipeline
     retrieval: RetrievalPipeline
     generation: GenerationPipeline
+    verification: VerificationPipeline
 
 
 def build_default_services() -> ApiServices:
@@ -57,6 +69,10 @@ def build_default_services() -> ApiServices:
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         raise RuntimeError("GROQ_API_KEY is required to configure the RAG pipeline.")
+    if not os.getenv("PATRONUS_API_KEY"):
+        raise RuntimeError(
+            "PATRONUS_API_KEY is required to configure the verification pipeline."
+        )
 
     embedder = LlamaIndexEmbedder(LocalHashEmbedding())
     store = LlamaIndexChromaStore.from_persist_dir(
@@ -76,6 +92,7 @@ def build_default_services() -> ApiServices:
                 model=os.getenv("GROQ_MODEL"),
             )
         ),
+        verification=LynxVerifier(),
     )
 
 

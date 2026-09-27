@@ -34,12 +34,22 @@ class SourceReference(BaseModel):
     score: float
 
 
+class VerificationResponse(BaseModel):
+    """Faithfulness verification details for the generated answer."""
+
+    passed: bool
+    verified: bool
+    score: float | None
+    explanation: str | None
+
+
 class QuestionResponse(BaseModel):
     """Answer and retrieval evidence returned to a client."""
 
     query: str
     answer: str
     sources: list[SourceReference]
+    verification: VerificationResponse
 
 
 class DocumentUploadResponse(BaseModel):

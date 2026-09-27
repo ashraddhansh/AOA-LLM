@@ -9,6 +9,7 @@ from backend.api.dependencies import ApiServices
 from backend.generation.types import GenerationResult
 from backend.ingestion.types import IngestionResult
 from backend.retrieval.types import RetrievalResult
+from backend.verification.types import VerificationResult
 
 
 class FakeIngestion:
@@ -36,9 +37,20 @@ class FakeGeneration:
         return GenerationResult(query, "grounded answer")
 
 
+class FakeVerification:
+    """Return a deterministic faithfulness result."""
+
+    def verify(
+        self, query: str, answer: str, chunks: tuple[str, ...]
+    ) -> VerificationResult:
+        return VerificationResult(True, True, 0.98, "Supported by context")
+
+
 def make_client() -> tuple[TestClient, FakeIngestion]:
     ingestion = FakeIngestion()
-    services = ApiServices(ingestion, FakeRetrieval(), FakeGeneration())
+    services = ApiServices(
+        ingestion, FakeRetrieval(), FakeGeneration(), FakeVerification()
+    )
     return TestClient(create_app(services)), ingestion
 
 
@@ -72,6 +84,7 @@ def test_upload_and_question_use_injected_services() -> None:
     assert answer.status_code == 200
     assert answer.json()["answer"] == "grounded answer"
     assert answer.json()["sources"] == [{"text": "source context", "score": 0.8}]
+    assert answer.json()["verification"]["passed"] is True
 
 
 def test_unknown_chat_and_unconfigured_services_are_safe() -> None:
