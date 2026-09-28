@@ -10,6 +10,7 @@ from chromadb.errors import ChromaError
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.classification.service import FailureType
 from backend.generation.types import GenerationError
 from backend.ingestion.types import IngestionError
 from backend.retrieval.types import RetrievalError
@@ -154,25 +155,78 @@ def create_app(
                 answer.answer,
                 retrieved.retrieved_chunks,
             )
+            remediation_result = None
+            if not verification.passed and pipeline.remediation is not None:
+                remediation_result = pipeline.remediation.remediate(
+                    payload.query,
+                    answer.answer,
+                    retrieved.retrieved_chunks,
+                    (
+                        retrieved.retrieval_scores[0]
+                        if retrieved.retrieval_scores
+                        else None
+                    ),
+                    verification,
+                    pipeline.generation.generate_from_web,
+                    pipeline.generation.regenerate,
+                    pipeline.verification.verify,
+                )
         except (RetrievalError, GenerationError, VerificationError) as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         chat.message_count += 2
         app.state.chat_store.touch(chat)
+        source_chunks = (
+            remediation_result.source_chunks
+            if remediation_result
+            else retrieved.retrieved_chunks
+        )
+        source_scores = (
+            tuple(0.0 for _ in source_chunks)
+            if remediation_result
+            and remediation_result.source_label == "not from your documents"
+            else retrieved.retrieval_scores
+        )
         sources = [
             SourceReference(text=text, score=score)
-            for text, score in zip(
-                retrieved.retrieved_chunks, retrieved.retrieval_scores, strict=True
-            )
+            for text, score in zip(source_chunks, source_scores, strict=True)
         ]
         return QuestionResponse(
             query=payload.query,
-            answer=answer.answer,
+            answer=remediation_result.answer if remediation_result else answer.answer,
             sources=sources,
             verification=VerificationResponse(
-                passed=verification.passed,
-                verified=verification.verified,
-                score=verification.score,
-                explanation=verification.explanation,
+                passed=(
+                    remediation_result.verification.passed
+                    if remediation_result
+                    else verification.passed
+                ),
+                verified=(
+                    remediation_result.verification.verified
+                    if remediation_result
+                    else verification.verified
+                ),
+                score=(
+                    remediation_result.verification.score
+                    if remediation_result
+                    else verification.score
+                ),
+                explanation=(
+                    remediation_result.verification.explanation
+                    if remediation_result
+                    else verification.explanation
+                ),
+            ),
+            failure_type=(
+                remediation_result.failure_type.value
+                if remediation_result
+                and isinstance(remediation_result.failure_type, FailureType)
+                else None
+            ),
+            remediation=remediation_result.remediation if remediation_result else None,
+            source_label=(
+                remediation_result.source_label
+                if remediation_result
+                else "uploaded documents"
             ),
         )
 

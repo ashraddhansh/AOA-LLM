@@ -10,7 +10,7 @@ from fastapi import HTTPException, Request
 
 from backend.generation.groq import GroqGenerator
 from backend.generation.service import GenerationService
-from backend.generation.types import GenerationResult
+from backend.generation.types import GenerationPipeline
 from backend.ingestion.llama_index_adapter import (
     LlamaIndexChromaStore,
     LlamaIndexEmbedder,
@@ -18,6 +18,8 @@ from backend.ingestion.llama_index_adapter import (
 )
 from backend.ingestion.service import IngestionService
 from backend.ingestion.types import IngestionResult
+from backend.remediation.serpapi import SerpApiSearch
+from backend.remediation.service import RemediationService
 from backend.retrieval.service import RetrievalService
 from backend.retrieval.types import RetrievalResult
 from backend.verification.lynx import LynxVerifier
@@ -42,13 +44,6 @@ class RetrievalPipeline(Protocol):
         """Retrieve context."""
 
 
-class GenerationPipeline(Protocol):
-    """Minimal generation interface required by the API."""
-
-    def generate(self, query: str, retrieved_chunks: Sequence[str]) -> GenerationResult:
-        """Generate an answer."""
-
-
 class VerificationPipeline(Protocol):
     """Minimal faithfulness verification interface required by the API."""
 
@@ -66,6 +61,7 @@ class ApiServices:
     retrieval: RetrievalPipeline
     generation: GenerationPipeline
     verification: VerificationPipeline
+    remediation: RemediationService | None = None
 
 
 def build_default_services() -> ApiServices:
@@ -76,6 +72,10 @@ def build_default_services() -> ApiServices:
     if not os.getenv("PATRONUS_API_KEY"):
         raise RuntimeError(
             "PATRONUS_API_KEY is required to configure the verification pipeline."
+        )
+    if not (os.getenv("SERPAPI_API_KEY") or os.getenv("WEB_SEARCH_API_KEY")):
+        raise RuntimeError(
+            "SERPAPI_API_KEY is required to configure web-search remediation."
         )
 
     embedder = LlamaIndexEmbedder(LocalHashEmbedding())
@@ -97,6 +97,10 @@ def build_default_services() -> ApiServices:
             )
         ),
         verification=LynxVerifier(),
+        remediation=RemediationService(
+            SerpApiSearch(),
+            retrieval_threshold=float(os.getenv("RETRIEVAL_SCORE_THRESHOLD", "0.5")),
+        ),
     )
 
 

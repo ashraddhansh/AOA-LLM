@@ -1,5 +1,6 @@
 """Typed contracts for grounded answer generation."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -21,3 +22,20 @@ class TextGenerator(Protocol):
 
     def generate(self, prompt: str) -> str:
         """Generate raw text for a complete prompt."""
+
+
+class GenerationPipeline(Protocol):
+    """Interface required by remediation orchestration."""
+
+    def generate(self, query: str, retrieved_chunks: Sequence[str]) -> GenerationResult:
+        """Generate an answer from context."""
+
+    def regenerate(
+        self, query: str, retrieved_chunks: Sequence[str]
+    ) -> GenerationResult:
+        """Generate a stricter retry from the same context."""
+
+    def generate_from_web(
+        self, query: str, search_results: Sequence[str]
+    ) -> GenerationResult:
+        """Generate from live web search context."""

@@ -47,6 +47,7 @@ source .venv/bin/activate
 - Required environment variables (never hardcode or commit actual values — use `.env`, which is git-ignored, and update `.env.example` when adding new ones):
   - `GROQ_API_KEY`
   - `PATRONUS_API_KEY`
+  - `SERPAPI_API_KEY` (or `WEB_SEARCH_API_KEY`)
   - `WEB_SEARCH_API_KEY`
   - `VECTOR_DB_URL` (if not using local Chroma)
 

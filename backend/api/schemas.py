@@ -50,6 +50,9 @@ class QuestionResponse(BaseModel):
     answer: str
     sources: list[SourceReference]
     verification: VerificationResponse
+    failure_type: str | None = None
+    remediation: str | None = None
+    source_label: str = "uploaded documents"
 
 
 class DocumentUploadResponse(BaseModel):

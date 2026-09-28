@@ -1,0 +1,17 @@
+# Verification failure remediation
+
+The question endpoint classifies an unverified answer using the strongest
+retrieval score:
+
+- Scores below `RETRIEVAL_SCORE_THRESHOLD` (default `0.5`) are
+  `retrieval_gap` failures. The system searches SerpAPI and labels a verified
+  answer as coming from live web search rather than uploaded documents.
+- Healthy scores are `bad_generation` failures. The system regenerates against
+  the same chunks with stricter quotation and grounding instructions, then
+  reruns Lynx.
+- If the selected remediation fails verification or an external service fails,
+  the API returns `insufficient reliable information`.
+
+Configure `SERPAPI_API_KEY` (or the existing `WEB_SEARCH_API_KEY`) in the
+backend `.env` file. Adjust the retrieval threshold only after calibrating it
+against representative documents.

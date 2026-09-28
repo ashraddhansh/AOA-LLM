@@ -44,3 +44,44 @@ class GenerationService:
         if not answer:
             raise GenerationError("Answer generator returned empty text.")
         return GenerationResult(query=query, answer=answer)
+
+    def regenerate(
+        self, query: str, retrieved_chunks: Sequence[str]
+    ) -> GenerationResult:
+        """Regenerate using direct-quotation and abstention instructions."""
+        prompt = build_grounded_prompt(query, retrieved_chunks)
+        strict_prompt = (
+            "This is a verification retry. Use the same context only. "
+            "Quote or closely paraphrase the relevant context, add no outside facts, "
+            'and say exactly "I don\'t know" if support is missing.\n\n'
+            f"{prompt}"
+        )
+        try:
+            answer = self._generator.generate(strict_prompt).strip()
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise GenerationError(f"Strict answer regeneration failed: {exc}") from exc
+        if not answer:
+            raise GenerationError("Strict answer regeneration returned empty text.")
+        return GenerationResult(query=query, answer=answer)
+
+    def generate_from_web(
+        self, query: str, search_results: Sequence[str]
+    ) -> GenerationResult:
+        """Generate an answer explicitly grounded in live web search results."""
+        context = "\n\n".join(
+            f"[Web result {index}]\n{result}"
+            for index, result in enumerate(search_results, start=1)
+        )
+        prompt = (
+            "Answer the question using only these live web search results. "
+            "Do not claim this came from the user's uploaded documents. "
+            'If unsupported, say exactly "I don\'t know".\n\n'
+            f"Web results:\n{context}\n\nQuestion:\n{query.strip()}\n\nAnswer:"
+        )
+        try:
+            answer = self._generator.generate(prompt).strip()
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise GenerationError(f"Web answer generation failed: {exc}") from exc
+        if not answer:
+            raise GenerationError("Web answer generation returned empty text.")
+        return GenerationResult(query=query, answer=answer)
