@@ -4,25 +4,50 @@ import logging
 import os
 import re
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from chromadb.errors import ChromaError
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import func, select
 
+from backend.auth import google_profile, hash_password, issue_token, verify_password
 from backend.classification.service import FailureType
+from backend.db.models import Chat, Document, User
+from backend.db.repositories import (
+    append_message,
+    create_user,
+    list_recent_messages,
+)
+from backend.db.repositories import (
+    create_chat as create_db_chat,
+)
+from backend.db.repositories import (
+    list_chats as list_db_chats,
+)
+from backend.db.session import get_session
 from backend.generation.types import GenerationError
 from backend.ingestion.types import IngestionError
 from backend.retrieval.types import RetrievalError
 from backend.verification.types import VerificationError
 
-from .dependencies import ApiServices, build_default_services, get_services
+from .dependencies import (
+    ApiServices,
+    build_default_services,
+    get_current_user,
+    get_services,
+)
 from .schemas import (
+    AuthResponse,
     ChatSummary,
     CreateChatRequest,
     DocumentUploadResponse,
+    GoogleLoginRequest,
+    LoginRequest,
+    MessageResponse,
     QuestionRequest,
     QuestionResponse,
+    RegisterRequest,
     SourceReference,
     VerificationResponse,
 )
@@ -53,6 +78,64 @@ def create_app(
         app.state.services = build_default_services()
     app.state.upload_dir = Path(".api_uploads")
 
+    def db_enabled() -> bool:
+        return bool(os.getenv("DATABASE_URL"))
+
+    @app.post("/auth/register", response_model=AuthResponse, status_code=201)
+    def register(payload: RegisterRequest) -> AuthResponse:
+        """Create an email/password account."""
+        if not db_enabled():
+            raise HTTPException(status_code=503, detail="Database is not configured")
+        with get_session() as session:
+            existing = session.scalar(
+                select(User).where(func.lower(User.email) == payload.email.lower())
+            )
+            if existing is not None:
+                raise HTTPException(
+                    status_code=409, detail="Email is already registered"
+                )
+            user = create_user(session, payload.email, hash_password(payload.password))
+            return AuthResponse(
+                access_token=issue_token(user), user_id=str(user.id), email=user.email
+            )
+
+    @app.post("/auth/login", response_model=AuthResponse)
+    def login(payload: LoginRequest) -> AuthResponse:
+        """Authenticate an email/password account."""
+        if not db_enabled():
+            raise HTTPException(status_code=503, detail="Database is not configured")
+        with get_session() as session:
+            user = session.scalar(
+                select(User).where(func.lower(User.email) == payload.email.lower())
+            )
+            if user is None or not verify_password(
+                payload.password, user.password_hash
+            ):
+                raise HTTPException(status_code=401, detail="Invalid email or password")
+            return AuthResponse(
+                access_token=issue_token(user), user_id=str(user.id), email=user.email
+            )
+
+    @app.post("/auth/google", response_model=AuthResponse)
+    async def google_login(payload: GoogleLoginRequest) -> AuthResponse:
+        """Sign in or create an account from a validated Google identity token."""
+        if not db_enabled():
+            raise HTTPException(status_code=503, detail="Database is not configured")
+        subject, email = await google_profile(payload.id_token)
+        with get_session() as session:
+            user = session.scalar(select(User).where(User.google_subject == subject))
+            if user is None:
+                user = session.scalar(
+                    select(User).where(func.lower(User.email) == email)
+                )
+                if user is None:
+                    user = create_user(session, email)
+                user.google_subject = subject
+                session.flush()
+            return AuthResponse(
+                access_token=issue_token(user), user_id=str(user.id), email=user.email
+            )
+
     origins = os.getenv(
         "CORS_ORIGINS",
         "http://localhost:5173,http://127.0.0.1:5173",
@@ -71,14 +154,79 @@ def create_app(
         return {"status": "ok"}
 
     @app.post("/chats", response_model=ChatSummary, status_code=201)
-    def create_chat(payload: CreateChatRequest) -> ChatSummary:
+    def create_chat(
+        payload: CreateChatRequest,
+        current_user: User | None = Depends(get_current_user),  # noqa: B008
+    ) -> ChatSummary:
         """Create a new in-memory conversation."""
+        if db_enabled():
+            assert current_user is not None
+            with get_session() as session:
+                chat = create_db_chat(session, current_user.id, payload.title)
+                return ChatSummary(
+                    id=str(chat.id),
+                    title=chat.title,
+                    updated_at=chat.updated_at,
+                    documents=[],
+                    message_count=0,
+                )
         return _summary(app.state.chat_store.create(payload.title))
 
     @app.get("/chats", response_model=list[ChatSummary])
-    def list_chats() -> list[ChatSummary]:
+    def list_chats(
+        current_user: User | None = Depends(get_current_user),  # noqa: B008
+    ) -> list[ChatSummary]:
         """List conversations newest first."""
+        if db_enabled():
+            assert current_user is not None
+            with get_session() as session:
+                return [
+                    ChatSummary(
+                        id=str(chat.id),
+                        title=chat.title,
+                        updated_at=chat.updated_at,
+                        documents=[document.filename for document in chat.documents],
+                        message_count=len(chat.messages),
+                    )
+                    for chat in list_db_chats(session, current_user.id)
+                ]
         return [_summary(chat) for chat in app.state.chat_store.list()]
+
+    @app.get("/chats/{chat_id}/messages", response_model=list[MessageResponse])
+    def get_messages(
+        chat_id: str,
+        current_user: User | None = Depends(get_current_user),  # noqa: B008
+    ) -> list[MessageResponse]:
+        """Load persisted messages for an owned chat."""
+        if not db_enabled():
+            return []
+        assert current_user is not None
+        with get_session() as session:
+            try:
+                rows = list_recent_messages(
+                    session, UUID(chat_id), current_user.id, limit=100
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=404, detail="Chat not found") from exc
+            return [
+                MessageResponse(
+                    id=str(row.id),
+                    role=row.role,
+                    content=row.content,
+                    created_at=row.created_at,
+                    verification=(
+                        VerificationResponse(
+                            passed=row.lynx_verdict == "pass",
+                            verified=bool(row.verification_verified),
+                            score=row.verification_score,
+                            explanation=row.verification_explanation,
+                        )
+                        if row.role == "assistant" and row.lynx_verdict is not None
+                        else None
+                    ),
+                )
+                for row in rows
+            ]
 
     @app.post(
         "/chats/{chat_id}/documents",
@@ -88,10 +236,27 @@ def create_app(
         chat_id: str,
         files: list[UploadFile] = File(...),  # noqa: B008
         pipeline: ApiServices = Depends(get_services),  # noqa: B008
+        current_user: User | None = Depends(get_current_user),  # noqa: B008
     ) -> DocumentUploadResponse:
         """Ingest uploaded files into the selected conversation."""
-        chat = app.state.chat_store.get(chat_id)
-        if chat is None:
+        memory_chat = app.state.chat_store.get(chat_id)
+        if db_enabled():
+            assert current_user is not None
+            try:
+                owned_chat_id = UUID(chat_id)
+            except ValueError as exc:
+                raise HTTPException(status_code=404, detail="Chat not found") from exc
+            with get_session() as session:
+                if (
+                    session.scalar(
+                        select(Chat.id).where(
+                            Chat.id == owned_chat_id, Chat.user_id == current_user.id
+                        )
+                    )
+                    is None
+                ):
+                    raise HTTPException(status_code=404, detail="Chat not found")
+        elif memory_chat is None:
             raise HTTPException(status_code=404, detail="Chat not found")
         if not files:
             raise HTTPException(status_code=400, detail="At least one file is required")
@@ -126,8 +291,29 @@ def create_app(
             names.append(name)
             chunks += result.chunk_count
 
-        chat.documents.extend(names)
-        app.state.chat_store.touch(chat)
+        if db_enabled():
+            assert current_user is not None
+            with get_session() as session:
+                db_chat = session.scalar(
+                    select(Chat).where(
+                        Chat.id == UUID(chat_id), Chat.user_id == current_user.id
+                    )
+                )
+                if db_chat is None:
+                    raise HTTPException(status_code=404, detail="Chat not found")
+                for name in names:
+                    document = Document(
+                        user_id=current_user.id,
+                        filename=name,
+                        file_type=Path(name).suffix.lstrip(".") or "txt",
+                        status="ready",
+                    )
+                    db_chat.documents.append(document)
+                session.flush()
+        else:
+            assert memory_chat is not None
+            memory_chat.documents.extend(names)
+            app.state.chat_store.touch(memory_chat)
         return DocumentUploadResponse(files=names, chunk_count=chunks)
 
     @app.post(
@@ -138,10 +324,27 @@ def create_app(
         chat_id: str,
         payload: QuestionRequest,
         pipeline: ApiServices = Depends(get_services),  # noqa: B008
+        current_user: User | None = Depends(get_current_user),  # noqa: B008
     ) -> QuestionResponse:
         """Retrieve context and generate an answer for a conversation."""
         chat = app.state.chat_store.get(chat_id)
-        if chat is None:
+        if db_enabled():
+            assert current_user is not None
+            try:
+                owned_chat_id = UUID(chat_id)
+            except ValueError as exc:
+                raise HTTPException(status_code=404, detail="Chat not found") from exc
+            with get_session() as session:
+                if (
+                    session.scalar(
+                        select(Chat.id).where(
+                            Chat.id == owned_chat_id, Chat.user_id == current_user.id
+                        )
+                    )
+                    is None
+                ):
+                    raise HTTPException(status_code=404, detail="Chat not found")
+        elif chat is None:
             raise HTTPException(status_code=404, detail="Chat not found")
         try:
             retrieved = pipeline.retrieval.retrieve(
@@ -174,8 +377,10 @@ def create_app(
                 )
         except (RetrievalError, GenerationError, VerificationError) as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
-        chat.message_count += 2
-        app.state.chat_store.touch(chat)
+        if not db_enabled():
+            assert chat is not None
+            chat.message_count += 2
+            app.state.chat_store.touch(chat)
         source_chunks = (
             remediation_result.source_chunks
             if remediation_result
@@ -191,7 +396,7 @@ def create_app(
             SourceReference(text=text, score=score)
             for text, score in zip(source_chunks, source_scores, strict=True)
         ]
-        return QuestionResponse(
+        response = QuestionResponse(
             query=payload.query,
             answer=remediation_result.answer if remediation_result else answer.answer,
             sources=sources,
@@ -233,5 +438,40 @@ def create_app(
                 remediation_result.error if remediation_result else None
             ),
         )
+        if db_enabled():
+            assert current_user is not None
+            try:
+                owned_chat_id = UUID(chat_id)
+            except ValueError as exc:
+                raise HTTPException(status_code=404, detail="Chat not found") from exc
+            with get_session() as session:
+                user_message = append_message(
+                    session,
+                    owned_chat_id,
+                    current_user.id,
+                    "user",
+                    payload.query,
+                )
+                assistant_message = append_message(
+                    session,
+                    owned_chat_id,
+                    current_user.id,
+                    "assistant",
+                    response.answer,
+                    source_type=(
+                        "web" if response.source_label == "web" else "document"
+                    ),
+                    lynx_verdict=("pass" if response.verification.passed else "fail"),
+                    verification_verified=response.verification.verified,
+                    verification_score=response.verification.score,
+                    verification_explanation=response.verification.explanation,
+                    failure_type=response.failure_type or "none",
+                    retrieval_scores=[source.score for source in sources],
+                    retrieved_chunk_ids=[],
+                    web_sources=[],
+                )
+                if user_message is None or assistant_message is None:
+                    raise HTTPException(status_code=404, detail="Chat not found")
+        return response
 
     return app

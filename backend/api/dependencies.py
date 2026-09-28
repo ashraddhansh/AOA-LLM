@@ -1,5 +1,8 @@
 """Dependency injection contracts for API application services."""
 
+# FastAPI dependencies intentionally use call expressions in parameter defaults.
+# ruff: noqa: B008
+
 import os
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -7,7 +10,8 @@ from pathlib import Path
 from typing import Protocol
 
 from dotenv import load_dotenv
-from fastapi import HTTPException, Request
+from fastapi import Depends, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from backend.generation.groq import GroqGenerator
 from backend.generation.service import GenerationService
@@ -23,6 +27,9 @@ from backend.remediation.serpapi import SerpApiSearch
 from backend.remediation.service import RemediationService
 
 load_dotenv()
+from backend.auth import user_from_token
+from backend.db.models import User
+from backend.db.session import get_session
 from backend.retrieval.service import RetrievalService
 from backend.retrieval.types import RetrievalResult
 from backend.verification.lynx import LynxVerifier
@@ -65,6 +72,9 @@ class ApiServices:
     generation: GenerationPipeline
     verification: VerificationPipeline
     remediation: RemediationService | None = None
+
+
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def build_default_services() -> ApiServices:
@@ -121,3 +131,17 @@ def get_services(request: Request) -> ApiServices:
     if services is None:
         raise HTTPException(status_code=503, detail="Pipeline services unavailable")
     return services
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> User | None:
+    """Resolve the bearer user when database authentication is configured."""
+    if not os.getenv("DATABASE_URL"):
+        return None
+    if credentials is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    with get_session() as session:
+        user = user_from_token(session, credentials.credentials)
+        session.expunge(user)
+        return user
