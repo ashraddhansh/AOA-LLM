@@ -380,13 +380,6 @@ function App() {
 
         <section className="content">
           {error ? <div className="api-error" role="alert">{error}</div> : null}
-          <div className="document-strip">
-            <div className="strip-heading"><BookOpen size={18} /><div><strong>Source documents</strong><span>{activeChat?.documents.length ? `${activeChat.documents.length} files in this chat` : "Add documents to get started"}</span></div></div>
-            <input ref={fileInput} type="file" multiple accept=".pdf,.docx,.txt,.md,.csv" hidden onChange={uploadDocuments} />
-            <button className="upload-button" onClick={() => fileInput.current?.click()} disabled={isUploading}><Upload size={16} /> {isUploading ? "Uploading..." : "Upload files"}</button>
-          </div>
-          {activeChat?.documents.length ? <div className="document-list">{activeChat.documents.map((document) => <span className="document-chip" key={document}><FileText size={14} />{document}<Check size={13} /></span>)}</div> : null}
-
           <div className="conversation">
             {activeChat?.messages.length === 0 ? <div className="empty-state"><div className="empty-icon"><Sparkles size={25} /></div><h2>Ask your documents anything</h2><p>Upload a source above, then ask a question. AOA retrieves relevant passages and abstains when the answer cannot be verified.</p><div className="suggestions"><button onClick={() => setQuery("Summarize the key points")}>Summarize the key points <ArrowUp size={14} /></button><button onClick={() => setQuery("What are the main risks?")}>What are the main risks? <ArrowUp size={14} /></button></div></div> : activeChat?.messages.map((message) => <article className={`message ${message.role}`} key={message.id}>            <div className="avatar">{message.role === "assistant" ? <img src="/logo.png" alt="" /> : "You"}</div><div><span className="message-label">{message.role === "assistant" ? "AOA" : "You"}</span><p>{message.content}</p>{message.role === "assistant" ? <VerificationCard result={message.verification} remediation={message.remediation} /> : null}{message.role === "assistant" && message.sources?.length ? <details className="source-details"><summary>Search/context sources ({message.sources.length})</summary>{message.sources.map((source, index) => <p className="source-item" key={`${source.text}-${index}`}>{source.text}</p>)}</details> : null}</div></article>)}
           </div>
@@ -395,6 +388,37 @@ function App() {
           <p className="disclaimer">AOA answers only from your uploaded sources. It will say “I don’t know” when the documents do not provide enough evidence.</p>
         </section>
       </main>
+      <aside className="documents-sidebar">
+        <div className="documents-sidebar-header">
+          <div className="documents-sidebar-title">
+            <BookOpen size={17} />
+            <div>
+              <p className="eyebrow">Knowledge base</p>
+              <h2>Source documents</h2>
+            </div>
+          </div>
+          <span className="document-count">{activeChat?.documents.length ?? 0}</span>
+        </div>
+        <p className="documents-sidebar-copy">
+          Add files to ground answers in this chat.
+        </p>
+        <input ref={fileInput} type="file" multiple accept=".pdf,.docx,.txt,.md,.csv" hidden onChange={uploadDocuments} />
+        <button className="upload-button" onClick={() => fileInput.current?.click()} disabled={isUploading}>
+          <Upload size={16} /> {isUploading ? "Uploading..." : "Add documents"}
+        </button>
+        <div className="document-list">
+          {activeChat?.documents.length ? activeChat.documents.map((document) => (
+            <span className="document-chip" key={document}>
+              <FileText size={14} /><span>{document}</span><Check size={13} />
+            </span>
+          )) : (
+            <div className="document-empty">
+              <FileText size={18} />
+              <span>No documents yet</span>
+            </div>
+          )}
+        </div>
+      </aside>
     </div>
   );
 }
