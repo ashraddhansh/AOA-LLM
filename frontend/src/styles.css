@@ -56,6 +56,19 @@ button { cursor: pointer; }
 .document-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .document-empty { display: grid; justify-items: center; gap: 8px; color: var(--muted); border: 1px dashed #d4d6dc; border-radius: 14px; padding: 28px 12px; font-size: 12px; }
 .topbar { height: 104px; display: flex; align-items: center; padding: 0 clamp(22px, 6vw, 92px); border-bottom: 1px solid #dedbd4; background: var(--surface); }
+.topbar { justify-content: space-between; gap: 20px; }
+.user-menu { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; }
+.auth-screen { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: #f5f1e8; }
+.auth-card { width: min(100%, 420px); background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 34px; box-shadow: 0 18px 45px #1a1b2012; }
+.auth-brand { padding: 0 0 24px; }
+.auth-card h1 { font: 600 32px "Junicode", serif; letter-spacing: -.04em; margin: 8px 0; }
+.auth-copy { color: var(--muted); font-size: 14px; line-height: 1.5; margin: 0 0 20px; }
+.auth-form { display: grid; gap: 10px; }
+.auth-form input { width: 100%; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-alt); color: var(--ink); padding: 13px 14px; outline: 0; }
+.auth-divider { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; margin: 20px 0; }
+.auth-divider::before, .auth-divider::after { content: ""; height: 1px; background: var(--line); flex: 1; }
+.auth-divider span { padding: 0 5px; }
+.auth-switch { border: 0; background: transparent; color: var(--blue-strong); font-size: 12px; padding: 8px 0; }
 .topbar h1 { font: 600 30px "Junicode", serif; margin: 5px 0 0; letter-spacing: -.04em; }
 .content { width: 100%; max-width: 940px; min-height: 0; flex: 1; overflow: hidden; display: flex; flex-direction: column; margin: 0 auto; padding: 42px clamp(22px, 6vw, 70px) 46px; }
 .document-strip { display: flex; justify-content: space-between; align-items: center; gap: 15px; border: 1px solid #d7e0ed; background: #edf2fc; border-radius: 20px; padding: 15px 16px; }
