@@ -368,14 +368,12 @@ function App() {
             </button>
           ))}
         </div>
-        <div className="sidebar-footer"><div className="status-dot" /> <span>Local workspace</span><span className="demo-pill">{apiBaseUrl ? "API" : "DEMO"}</span></div>
       </aside>
 
       <main className="main-content">
         <header className="topbar">
           <button className="icon-button menu-button" onClick={() => setSidebarOpen(true)} aria-label="Open sidebar"><Menu size={20} /></button>
           <div><p className="eyebrow">Workspace / {activeChat?.title}</p><h1>{activeChat?.title}</h1></div>
-          <div className="topbar-actions"><span className="secure-label"><ShieldCheck size={15} /> Grounded answers</span></div>
         </header>
 
         <section className="content">
