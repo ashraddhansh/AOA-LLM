@@ -10,6 +10,16 @@ class FailureType(StrEnum):
     BAD_GENERATION = "bad_generation"
 
 
+def is_abstention(answer: str) -> bool:
+    """Return whether an answer explicitly declines to answer."""
+    normalized = " ".join(answer.lower().split()).strip(" .!?")
+    return normalized in {
+        "i don't know",
+        "i do not know",
+        "insufficient reliable information",
+    }
+
+
 def classify_failure(top_score: float | None, threshold: float) -> FailureType:
     """Classify an unverified answer from its strongest retrieval score."""
     if top_score is None or top_score < threshold:

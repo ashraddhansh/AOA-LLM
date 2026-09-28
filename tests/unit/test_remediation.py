@@ -2,7 +2,11 @@
 
 from collections.abc import Sequence
 
-from backend.classification.service import FailureType, classify_failure
+from backend.classification.service import (
+    FailureType,
+    classify_failure,
+    is_abstention,
+)
 from backend.generation.types import GenerationResult
 from backend.remediation.service import RemediationService
 from backend.verification.types import VerificationResult
@@ -26,6 +30,8 @@ def passed() -> VerificationResult:
 def test_classifies_retrieval_gap_and_bad_generation() -> None:
     assert classify_failure(0.2, 0.5) is FailureType.RETRIEVAL_GAP
     assert classify_failure(0.8, 0.5) is FailureType.BAD_GENERATION
+    assert is_abstention("I don't know.") is True
+    assert is_abstention("A supported answer") is False
 
 
 def test_retrieval_gap_uses_web_search_and_labels_answer() -> None:
@@ -70,6 +76,25 @@ def test_bad_generation_regenerates_against_same_chunks() -> None:
     assert result.answer == "strict answer"
     assert result.remediation == "strict_regeneration"
     assert seen == [("document context",)]
+
+
+def test_abstention_forces_web_search_even_with_healthy_retrieval() -> None:
+    service = RemediationService(FakeSearch(), retrieval_threshold=0.5)
+
+    result = service.remediate(
+        "question",
+        "I don't know",
+        ("irrelevant context",),
+        0.9,
+        passed(),
+        lambda query, chunks: GenerationResult(query, "web answer"),
+        lambda query, chunks: GenerationResult(query, "retry"),
+        lambda query, answer, chunks: passed(),
+        FailureType.RETRIEVAL_GAP,
+    )
+
+    assert result.remediation == "web_search"
+    assert result.failure_type is FailureType.RETRIEVAL_GAP
 
 
 def test_failed_remediation_abstains() -> None:

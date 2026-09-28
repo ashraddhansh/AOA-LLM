@@ -10,7 +10,7 @@ from chromadb.errors import ChromaError
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.classification.service import FailureType
+from backend.classification.service import FailureType, is_abstention
 from backend.generation.types import GenerationError
 from backend.ingestion.types import IngestionError
 from backend.retrieval.types import RetrievalError
@@ -156,7 +156,9 @@ def create_app(
                 retrieved.retrieved_chunks,
             )
             remediation_result = None
-            if not verification.passed and pipeline.remediation is not None:
+            if pipeline.remediation is not None and (
+                not verification.passed or is_abstention(answer.answer)
+            ):
                 remediation_result = pipeline.remediation.remediate(
                     payload.query,
                     answer.answer,
@@ -170,6 +172,7 @@ def create_app(
                     pipeline.generation.generate_from_web,
                     pipeline.generation.regenerate,
                     pipeline.verification.verify,
+                    FailureType.RETRIEVAL_GAP if is_abstention(answer.answer) else None,
                 )
         except (RetrievalError, GenerationError, VerificationError) as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc

@@ -44,11 +44,12 @@ class RemediationService:
         generate: Callable[[str, Sequence[str]], GenerationResult],
         regenerate: Callable[[str, Sequence[str]], GenerationResult],
         verify: Callable[[str, str, Sequence[str]], VerificationResult],
+        failure_type: FailureType | None = None,
     ) -> RemediationResult:
         """Remediate one failed answer, returning abstention if needed."""
         from backend.classification.service import classify_failure
 
-        failure_type = classify_failure(top_score, self._threshold)
+        failure_type = failure_type or classify_failure(top_score, self._threshold)
         try:
             if failure_type is FailureType.BAD_GENERATION:
                 retry = regenerate(query, chunks)
