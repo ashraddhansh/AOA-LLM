@@ -15,3 +15,8 @@ retrieval score:
 Configure `SERPAPI_API_KEY` (or the existing `WEB_SEARCH_API_KEY`) in the
 backend `.env` file. Adjust the retrieval threshold only after calibrating it
 against representative documents.
+
+Web generation uses `GROQ_WEB_MODEL` when configured. If that model is
+unavailable or attempts an unsupported tool call, the Groq adapter retries
+configured fallbacks and then discovers compatible models from Groq's
+`/models` endpoint.

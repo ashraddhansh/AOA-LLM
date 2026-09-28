@@ -116,3 +116,51 @@ def test_groq_rejects_tool_use_errors_with_actionable_message() -> None:
 
     with pytest.raises(GenerationError, match="tool call"):
         GroqGenerator(client=Client(), model="groq-test").generate("prompt")
+
+
+def test_groq_falls_back_after_tool_use_failure() -> None:
+    class Response:
+        def __init__(self, status: int, payload: dict[str, Any]) -> None:
+            self.status = status
+            self.payload = payload
+
+        def raise_for_status(self) -> None:
+            if self.status >= 400:
+                request = httpx.Request(
+                    "POST", "https://api.groq.com/openai/v1/chat/completions"
+                )
+                raise httpx.HTTPStatusError(
+                    "bad request",
+                    request=request,
+                    response=httpx.Response(
+                        self.status, request=request, json=self.payload
+                    ),
+                )
+
+        def json(self) -> dict[str, Any]:
+            return self.payload
+
+    class Client:
+        def __init__(self) -> None:
+            self.models: list[str] = []
+
+        def post(self, path: str, **kwargs: Any) -> Response:
+            self.models.append(kwargs["json"]["model"])
+            if len(self.models) == 1:
+                return Response(
+                    400,
+                    {"error": {"message": "called a tool", "code": "tool_use_failed"}},
+                )
+            return Response(
+                200, {"choices": [{"message": {"content": "fallback answer"}}]}
+            )
+
+    client = Client()
+    result = GroqGenerator(
+        client=client,
+        model="tool-prone",
+        fallback_models=("available-fallback",),
+    ).generate("prompt")
+
+    assert result == "fallback answer"
+    assert client.models == ["tool-prone", "available-fallback"]

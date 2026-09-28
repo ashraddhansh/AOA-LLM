@@ -100,7 +100,11 @@ def build_default_services() -> ApiServices:
             ),
             web_generator=GroqGenerator(
                 api_key=api_key,
-                model=os.getenv("GROQ_WEB_MODEL", "llama-3.1-8b-instant"),
+                model=os.getenv("GROQ_WEB_MODEL", "openai/gpt-oss-20b"),
+                fallback_models=(
+                    "qwen/qwen3-32b",
+                    "meta-llama/llama-4-scout-17b-16e-instruct",
+                ),
             ),
         ),
         verification=LynxVerifier(),
