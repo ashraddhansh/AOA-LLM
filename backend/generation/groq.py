@@ -64,7 +64,10 @@ class GroqGenerator:
                     "messages": [
                         {
                             "role": "system",
-                            "content": "Answer only from the supplied context.",
+                            "content": (
+                                "Answer only from the supplied context. "
+                                "Return the answer as clear Markdown, not HTML."
+                            ),
                         },
                         {"role": "user", "content": prompt},
                     ],

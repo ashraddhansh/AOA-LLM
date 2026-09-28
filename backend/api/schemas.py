@@ -22,9 +22,10 @@ class ChatSummary(BaseModel):
 
 
 class QuestionRequest(BaseModel):
-    """Payload containing a document-grounded question."""
+    """Payload containing a question and optional web-remediation request."""
 
     query: str = Field(min_length=1)
+    web_search: bool = False
 
 
 class SourceReference(BaseModel):

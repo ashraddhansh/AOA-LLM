@@ -8,11 +8,15 @@ import {
   MessageCircle,
   Plus,
   Search,
+  Copy,
+  RefreshCw,
   ShieldCheck,
   Sparkles,
   Upload,
   X,
 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 type Verification = {
   passed: boolean;
@@ -33,6 +37,7 @@ type Message = {
   verification?: Verification;
   remediation?: Remediation;
   sources?: { text: string; score: number }[];
+  query?: string;
 };
 type Chat = {
   id: string;
@@ -149,7 +154,10 @@ function App() {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isUploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const [isAnswering, setIsAnswering] = useState(false);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const composerTextarea = useRef<HTMLTextAreaElement>(null);
   const activeChat = chats.find((chat) => chat.id === activeId) ?? chats[0];
 
   useEffect(() => {
@@ -224,29 +232,37 @@ function App() {
     setSidebarOpen(false);
   };
 
-  const sendQuestion = async (event: FormEvent) => {
-    event.preventDefault();
-    const question = query.trim();
+  const answerQuestion = async (
+    question: string,
+    addUserMessage = true,
+    webSearch = false,
+  ) => {
     if (!question || !activeChat) return;
-    const userMessage: Message = {
-      id: `user-${Date.now()}`,
-      role: "user",
-      content: question,
-    };
-    setQuery("");
-    updateActiveChat((chat) => ({
-      ...chat,
-      title: chat.messages.length === 0 ? question.slice(0, 34) : chat.title,
-      updatedAt: "Just now",
-      messages: [...chat.messages, userMessage],
-    }));
-
+    if (addUserMessage) {
+      const userMessage: Message = {
+        id: `user-${Date.now()}`,
+        role: "user",
+        content: question,
+      };
+      setQuery("");
+      if (composerTextarea.current) {
+        composerTextarea.current.style.height = "auto";
+        composerTextarea.current.style.overflowY = "hidden";
+      }
+      updateActiveChat((chat) => ({
+        ...chat,
+        title: chat.messages.length === 0 ? question.slice(0, 34) : chat.title,
+        updatedAt: "Just now",
+        messages: [...chat.messages, userMessage],
+      }));
+    }
+    setIsAnswering(true);
     if (apiBaseUrl) {
       try {
         const response = await fetch(`${apiBaseUrl}/chats/${activeId}/questions`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: question }),
+          body: JSON.stringify({ query: question, web_search: webSearch }),
         });
         if (!response.ok) {
           const detail = (await response.json().catch(() => null)) as {
@@ -271,6 +287,7 @@ function App() {
               id: `assistant-${Date.now()}`,
               role: "assistant",
               content: data.answer,
+              query: question,
               verification: data.verification,
               remediation: {
                 failure_type: data.failure_type,
@@ -282,7 +299,6 @@ function App() {
             },
           ],
         }));
-        return;
       } catch (requestError) {
         updateActiveChat((chat) => ({
           ...chat,
@@ -297,8 +313,9 @@ function App() {
             },
           ],
         }));
-        return;
       }
+      setIsAnswering(false);
+      return;
     }
 
     window.setTimeout(() => {
@@ -314,7 +331,37 @@ function App() {
           },
         ],
       }));
+      setIsAnswering(false);
     }, 450);
+  };
+
+  const sendQuestion = async (event: FormEvent) => {
+    event.preventDefault();
+    await answerQuestion(query.trim());
+  };
+
+  const copyMessage = async (message: Message) => {
+    await navigator.clipboard.writeText(message.content);
+    setCopiedMessageId(message.id);
+    window.setTimeout(() => setCopiedMessageId(null), 1600);
+  };
+
+  const regenerateMessage = async (messageIndex: number) => {
+    const previousUserMessage = activeChat?.messages
+      .slice(0, messageIndex)
+      .reverse()
+      .find((message) => message.role === "user");
+    if (previousUserMessage) await answerQuestion(previousUserMessage.content, false);
+  };
+
+  const searchWebForMessage = async (messageIndex: number) => {
+    const previousUserMessage = activeChat?.messages
+      .slice(0, messageIndex)
+      .reverse()
+      .find((message) => message.role === "user");
+    if (previousUserMessage) {
+      await answerQuestion(previousUserMessage.content, false, true);
+    }
   };
 
   const uploadDocuments = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -379,10 +426,10 @@ function App() {
         <section className="content">
           {error ? <div className="api-error" role="alert">{error}</div> : null}
           <div className="conversation">
-            {activeChat?.messages.length === 0 ? <div className="empty-state"><div className="empty-icon"><img src="/logo.png" alt="AOA" /></div><h2>Ask your documents anything</h2><p>Upload a source above, then ask a question. AOA retrieves relevant passages and abstains when the answer cannot be verified.</p><div className="suggestions"><button onClick={() => setQuery("Summarize the key points")}>Summarize the key points <ArrowUp size={14} /></button><button onClick={() => setQuery("What are the main risks?")}>What are the main risks? <ArrowUp size={14} /></button></div></div> : activeChat?.messages.map((message) => <article className={`message ${message.role}`} key={message.id}>            <div className="avatar">{message.role === "assistant" ? <img src="/logo.png" alt="" /> : "You"}</div><div><span className="message-label">{message.role === "assistant" ? "AOA" : "You"}</span><p>{message.content}</p>{message.role === "assistant" ? <VerificationCard result={message.verification} remediation={message.remediation} /> : null}{message.role === "assistant" && message.sources?.length ? <details className="source-details"><summary>Search/context sources ({message.sources.length})</summary>{message.sources.map((source, index) => <p className="source-item" key={`${source.text}-${index}`}>{source.text}</p>)}</details> : null}</div></article>)}
+            {activeChat?.messages.length === 0 ? <div className="empty-state"><div className="empty-icon"><img src="/logo.png" alt="AOA" /></div><h2>Ask your documents anything</h2><p>Upload a source above, then ask a question. AOA retrieves relevant passages and abstains when the answer cannot be verified.</p><div className="suggestions"><button onClick={() => setQuery("Summarize the key points")}>Summarize the key points <ArrowUp size={14} /></button><button onClick={() => setQuery("What are the main risks?")}>What are the main risks? <ArrowUp size={14} /></button></div></div> : activeChat?.messages.map((message, messageIndex) => <article className={`message ${message.role}`} key={message.id}>            <div className="avatar">{message.role === "assistant" ? <img src="/logo.png" alt="" /> : "You"}</div><div><span className="message-label">{message.role === "assistant" ? "AOA" : "You"}</span>{message.role === "assistant" ? <div className="message-markdown">            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown></div> : <p>{message.content}</p>}{message.role === "assistant" ? <VerificationCard result={message.verification} remediation={message.remediation} /> : null}{message.role === "assistant" ? <div className="message-actions"><button onClick={() => void copyMessage(message)} aria-label="Copy answer" title={copiedMessageId === message.id ? "Copied" : "Copy answer"}><Copy size={14} /> {copiedMessageId === message.id ? "Copied" : "Copy"}</button><button onClick={() => void regenerateMessage(messageIndex)} disabled={isAnswering} aria-label="Regenerate answer" title="Regenerate answer"><RefreshCw size={14} /> Regenerate</button>{message.verification && (!message.verification.passed || !message.verification.verified || message.content.toLowerCase().includes("i don't know")) ? <button onClick={() => void searchWebForMessage(messageIndex)} disabled={isAnswering} className="web-search-action" aria-label="Search the web"><Search size={14} /> Search the web</button> : null}</div> : null}{message.role === "assistant" && message.sources?.length ? <details className="source-details"><summary>Search/context sources ({message.sources.length})</summary>{message.sources.map((source, index) => <p className="source-item" key={`${source.text}-${index}`}>{source.text}</p>)}</details> : null}</div></article>)}{isAnswering ? <div className="message assistant loading-message"><div className="avatar"><img src="/logo.png" alt="" /></div><div className="loading-bubble" aria-label="AOA is thinking"><span /><span /><span /></div></div> : null}
           </div>
 
-          <form className="composer" onSubmit={sendQuestion}><div className="composer-input"><textarea value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendQuestion(event); } }} placeholder="Ask a question about your documents..." rows={1} /><span className="composer-hint">Enter to send · Shift + Enter for a new line</span></div><button type="submit" disabled={!query.trim()} aria-label="Send question"><ArrowUp size={19} /></button></form>
+          <form className={`composer ${query.includes("\n") ? "composer-expanded" : ""}`} onSubmit={sendQuestion}><div className="composer-input"><textarea ref={composerTextarea} value={query} onChange={(event) => { const textarea = event.currentTarget; setQuery(textarea.value); textarea.style.height = "auto"; const maxHeight = 140; textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`; textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden"; }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendQuestion(event); } }} placeholder="Ask a question about your documents..." rows={1} /></div><button type="submit" disabled={!query.trim()} aria-label="Send question"><ArrowUp size={19} /></button></form>
           <p className="disclaimer">AOA answers only from your uploaded sources. It will say “I don’t know” when the documents do not provide enough evidence.</p>
         </section>
       </main>

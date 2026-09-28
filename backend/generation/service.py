@@ -4,6 +4,12 @@ from collections.abc import Sequence
 
 from .types import GenerationError, GenerationResult, TextGenerator
 
+MARKDOWN_INSTRUCTION = (
+    "Format the answer as clear Markdown. Use short paragraphs, headings, "
+    "bulleted or numbered lists, and **bold** emphasis when useful. "
+    "Do not use HTML or fenced code blocks unless the context contains code."
+)
+
 
 def build_grounded_prompt(query: str, retrieved_chunks: Sequence[str]) -> str:
     """Build the LLD-specified prompt from a question and retrieved context."""
@@ -21,7 +27,8 @@ def build_grounded_prompt(query: str, retrieved_chunks: Sequence[str]) -> str:
     return (
         "Answer the question using only the provided context. "
         'If the answer is not present in the context, say exactly "I don\'t know". '
-        "Do not use outside knowledge or invent facts.\n\n"
+        "Do not use outside knowledge or invent facts. "
+        f"{MARKDOWN_INSTRUCTION}\n\n"
         f"Context:\n{context}\n\n"
         f"Question:\n{query.strip()}\n\n"
         "Answer:"
@@ -56,7 +63,7 @@ class GenerationService:
         strict_prompt = (
             "This is a verification retry. Use the same context only. "
             "Quote or closely paraphrase the relevant context, add no outside facts, "
-            'and say exactly "I don\'t know" if support is missing.\n\n'
+            f'and say exactly "I don\'t know" if support is missing. {MARKDOWN_INSTRUCTION}\n\n'
             f"{prompt}"
         )
         try:
@@ -78,7 +85,7 @@ class GenerationService:
         prompt = (
             "Answer the question using only these live web search results. "
             "Do not claim this came from the user's uploaded documents. "
-            'If unsupported, say exactly "I don\'t know".\n\n'
+            f'If unsupported, say exactly "I don\'t know". {MARKDOWN_INSTRUCTION}\n\n'
             f"Web results:\n{context}\n\nQuestion:\n{query.strip()}\n\nAnswer:"
         )
         try:
