@@ -46,12 +46,19 @@ class GroqGenerator:
                         {"role": "user", "content": prompt},
                     ],
                     "temperature": 0,
+                    "tool_choice": "none",
                 },
             )
             response.raise_for_status()
             payload = response.json()
         except httpx.HTTPStatusError as exc:
             detail = exc.response.text[:500]
+            if "tool_use_failed" in detail or "called a tool" in detail.lower():
+                raise GenerationError(
+                    "Groq attempted an unsupported tool call while generating text. "
+                    "Tool calling is disabled for this RAG request. "
+                    f"Groq response: {detail}"
+                ) from exc
             if exc.response.status_code == 404:
                 raise GenerationError(
                     f"Groq model '{self._model}' was not found or is unavailable. "

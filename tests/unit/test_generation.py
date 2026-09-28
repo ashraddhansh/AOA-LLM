@@ -2,6 +2,7 @@
 
 from typing import Any
 
+import httpx
 import pytest
 
 from backend.generation import (
@@ -78,3 +79,27 @@ def test_groq_adapter_calls_configured_model() -> None:
     assert client.arguments["path"] == "/chat/completions"
     assert client.arguments["json"]["model"] == "groq-test"
     assert client.arguments["json"]["messages"][1]["content"] == "prompt"
+    assert client.arguments["json"]["tool_choice"] == "none"
+
+
+def test_groq_rejects_tool_use_errors_with_actionable_message() -> None:
+    class Client:
+        def post(self, path: str, **kwargs: Any) -> Any:
+            request = httpx.Request(
+                "POST", "https://api.groq.com/openai/v1/chat/completions"
+            )
+            response = httpx.Response(
+                400,
+                request=request,
+                json={
+                    "error": {
+                        "message": "Tool choice is none, but model called a tool",
+                        "code": "tool_use_failed",
+                    }
+                },
+            )
+            response.raise_for_status()
+            return response
+
+    with pytest.raises(GenerationError, match="tool call"):
+        GroqGenerator(client=Client(), model="groq-test").generate("prompt")
