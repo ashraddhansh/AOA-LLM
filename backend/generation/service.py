@@ -31,8 +31,11 @@ def build_grounded_prompt(query: str, retrieved_chunks: Sequence[str]) -> str:
 class GenerationService:
     """Generate a raw, context-grounded answer without verification."""
 
-    def __init__(self, generator: TextGenerator) -> None:
+    def __init__(
+        self, generator: TextGenerator, web_generator: TextGenerator | None = None
+    ) -> None:
         self._generator = generator
+        self._web_generator = web_generator or generator
 
     def generate(self, query: str, retrieved_chunks: Sequence[str]) -> GenerationResult:
         """Generate an answer from exactly the chunks supplied by retrieval."""
@@ -79,7 +82,7 @@ class GenerationService:
             f"Web results:\n{context}\n\nQuestion:\n{query.strip()}\n\nAnswer:"
         )
         try:
-            answer = self._generator.generate(prompt).strip()
+            answer = self._web_generator.generate(prompt).strip()
         except (OSError, RuntimeError, ValueError) as exc:
             raise GenerationError(f"Web answer generation failed: {exc}") from exc
         if not answer:

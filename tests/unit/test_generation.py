@@ -46,6 +46,19 @@ def test_generation_returns_raw_answer_and_uses_retrieved_chunks() -> None:
     assert "What is AOA?" in generator.prompt
 
 
+def test_web_generation_uses_dedicated_web_generator() -> None:
+    document_generator = FakeGenerator("document answer")
+    web_generator = FakeGenerator("web answer")
+
+    result = GenerationService(
+        document_generator, web_generator=web_generator
+    ).generate_from_web("What is AOA?", ["Web result"])
+
+    assert result.answer == "web answer"
+    assert "Web result" in web_generator.prompt
+    assert document_generator.prompt == ""
+
+
 def test_empty_question_is_rejected() -> None:
     with pytest.raises(GenerationError, match="Question must contain"):
         GenerationService(FakeGenerator()).generate(" ", ["context"])

@@ -97,7 +97,11 @@ def build_default_services() -> ApiServices:
             GroqGenerator(
                 api_key=api_key,
                 model=os.getenv("GROQ_MODEL"),
-            )
+            ),
+            web_generator=GroqGenerator(
+                api_key=api_key,
+                model=os.getenv("GROQ_WEB_MODEL", "llama-3.1-8b-instant"),
+            ),
         ),
         verification=LynxVerifier(),
         remediation=RemediationService(
