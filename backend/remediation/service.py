@@ -4,7 +4,7 @@ import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from backend.classification.service import FailureType
+from backend.classification.service import FailureType, is_abstention
 from backend.generation.types import GenerationError, GenerationResult
 from backend.remediation.serpapi import SearchError, SerpApiSearch
 from backend.verification.types import VerificationError, VerificationResult
@@ -71,7 +71,7 @@ class RemediationService:
                 web_chunks = self._search.search(query)
                 web_answer = generate(query, web_chunks)
                 web_verification = verify(query, web_answer.answer, web_chunks)
-                if web_verification.passed:
+                if web_verification.passed and not is_abstention(web_answer.answer):
                     return RemediationResult(
                         web_answer.answer,
                         web_verification,
@@ -80,6 +80,20 @@ class RemediationService:
                         "not from your documents",
                         tuple(web_chunks),
                     )
+                return RemediationResult(
+                    "insufficient reliable information",
+                    VerificationResult(
+                        False,
+                        False,
+                        web_verification.score,
+                        "Web search returned context, but no supported answer was generated.",
+                    ),
+                    failure_type,
+                    "abstain",
+                    "not from your documents",
+                    tuple(web_chunks),
+                    "Search results were found, but Groq returned an abstention.",
+                )
         except (GenerationError, SearchError, VerificationError) as exc:
             logger.exception("RAG remediation failed for query %r", query)
             return RemediationResult(

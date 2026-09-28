@@ -97,6 +97,25 @@ def test_abstention_forces_web_search_even_with_healthy_retrieval() -> None:
     assert result.failure_type is FailureType.RETRIEVAL_GAP
 
 
+def test_web_abstention_preserves_search_results_for_display() -> None:
+    service = RemediationService(FakeSearch(), retrieval_threshold=0.5)
+
+    result = service.remediate(
+        "question",
+        "I don't know",
+        ("document context",),
+        0.2,
+        passed(),
+        lambda query, chunks: GenerationResult(query, "I don't know"),
+        lambda query, chunks: GenerationResult(query, "retry"),
+        lambda query, answer, chunks: passed(),
+    )
+
+    assert result.answer == "insufficient reliable information"
+    assert result.source_label == "not from your documents"
+    assert result.source_chunks == ("web result",)
+
+
 def test_failed_remediation_abstains() -> None:
     service = RemediationService(FakeSearch(), retrieval_threshold=0.5)
 

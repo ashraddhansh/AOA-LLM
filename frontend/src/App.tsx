@@ -32,6 +32,7 @@ type Message = {
   content: string;
   verification?: Verification;
   remediation?: Remediation;
+  sources?: { text: string; score: number }[];
 };
 type Chat = {
   id: string;
@@ -277,6 +278,7 @@ function App() {
                 source_label: data.source_label,
                 remediation_error: data.remediation_error,
               },
+              sources: data.sources,
             },
           ],
         }));
@@ -386,7 +388,7 @@ function App() {
           {activeChat?.documents.length ? <div className="document-list">{activeChat.documents.map((document) => <span className="document-chip" key={document}><FileText size={14} />{document}<Check size={13} /></span>)}</div> : null}
 
           <div className="conversation">
-            {activeChat?.messages.length === 0 ? <div className="empty-state"><div className="empty-icon"><Sparkles size={25} /></div><h2>Ask your documents anything</h2><p>Upload a source above, then ask a question. AOA retrieves relevant passages and abstains when the answer cannot be verified.</p><div className="suggestions"><button onClick={() => setQuery("Summarize the key points")}>Summarize the key points <ArrowUp size={14} /></button><button onClick={() => setQuery("What are the main risks?")}>What are the main risks? <ArrowUp size={14} /></button></div></div> : activeChat?.messages.map((message) => <article className={`message ${message.role}`} key={message.id}><div className="avatar">{message.role === "assistant" ? <ShieldCheck size={17} /> : "You"}</div><div><span className="message-label">{message.role === "assistant" ? "AOA" : "You"}</span><p>{message.content}</p>{message.role === "assistant" ? <VerificationCard result={message.verification} remediation={message.remediation} /> : null}</div></article>)}
+            {activeChat?.messages.length === 0 ? <div className="empty-state"><div className="empty-icon"><Sparkles size={25} /></div><h2>Ask your documents anything</h2><p>Upload a source above, then ask a question. AOA retrieves relevant passages and abstains when the answer cannot be verified.</p><div className="suggestions"><button onClick={() => setQuery("Summarize the key points")}>Summarize the key points <ArrowUp size={14} /></button><button onClick={() => setQuery("What are the main risks?")}>What are the main risks? <ArrowUp size={14} /></button></div></div> : activeChat?.messages.map((message) => <article className={`message ${message.role}`} key={message.id}><div className="avatar">{message.role === "assistant" ? <ShieldCheck size={17} /> : "You"}</div><div><span className="message-label">{message.role === "assistant" ? "AOA" : "You"}</span><p>{message.content}</p>{message.role === "assistant" ? <VerificationCard result={message.verification} remediation={message.remediation} /> : null}{message.role === "assistant" && message.sources?.length ? <details className="source-details"><summary>Search/context sources ({message.sources.length})</summary>{message.sources.map((source, index) => <p className="source-item" key={`${source.text}-${index}`}>{source.text}</p>)}</details> : null}</div></article>)}
           </div>
 
           <form className="composer" onSubmit={sendQuestion}><textarea value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendQuestion(event); } }} placeholder="Ask a question about your documents..." rows={1} /><button type="submit" disabled={!query.trim()} aria-label="Send question"><ArrowUp size={19} /></button><span className="composer-hint">Enter to send · Shift + Enter for a new line</span></form>

@@ -69,6 +69,9 @@ button { cursor: pointer; }
 .verification-fail .verification-header strong { color: #b05447; }
 .verification-unknown { border-color: #e5dcc0; background: #fffdf4; }
 .verification-unknown .verification-header strong { color: #9a7b32; }
+.source-details { width: min(100%, 470px); margin-top: 9px; color: #6f7d71; font-size: 11px; }
+.source-details summary { cursor: pointer; color: #5c7561; font-weight: 700; }
+.source-item { white-space: pre-wrap; border-left: 2px solid #dce7dc; padding-left: 8px; line-height: 1.4; }
 .composer { position: relative; display: flex; align-items: flex-end; border: 1px solid #cbdaca; background: #fff; border-radius: 11px; padding: 9px 9px 9px 14px; box-shadow: 0 5px 16px #335c3b0d; }
 .composer textarea { flex: 1; resize: none; border: 0; outline: 0; color: #27372c; min-height: 25px; max-height: 100px; line-height: 1.5; font-size: 13px; padding: 3px 5px 20px 0; }
 .composer textarea::placeholder { color: #9aa89c; }
