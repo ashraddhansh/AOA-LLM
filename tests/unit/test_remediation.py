@@ -50,7 +50,7 @@ def test_retrieval_gap_uses_web_search_and_labels_answer() -> None:
 
     assert result.answer == "web answer"
     assert result.remediation == "web_search"
-    assert result.source_label == "not from your documents"
+    assert result.source_label == "not found in your documents"
     assert result.source_chunks == ("web result",)
 
 
@@ -111,8 +111,8 @@ def test_web_abstention_preserves_search_results_for_display() -> None:
         lambda query, answer, chunks: passed(),
     )
 
-    assert result.answer == "insufficient reliable information"
-    assert result.source_label == "not from your documents"
+    assert result.answer == "I could not find reliable information to answer this."
+    assert result.source_label == "not found in your documents"
     assert result.source_chunks == ("web result",)
 
 
@@ -130,6 +130,6 @@ def test_failed_remediation_abstains() -> None:
         lambda query, answer, chunks: failed(),
     )
 
-    assert result.answer == "insufficient reliable information"
+    assert result.answer == "I could not find reliable information to answer this."
     assert result.remediation == "abstain"
     assert result.verification.verified is False

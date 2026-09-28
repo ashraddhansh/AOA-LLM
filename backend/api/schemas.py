@@ -52,7 +52,7 @@ class QuestionResponse(BaseModel):
     verification: VerificationResponse
     failure_type: str | None = None
     remediation: str | None = None
-    source_label: str = "uploaded documents"
+    source_label: str = "document-grounded"
     remediation_error: str | None = None
 
 

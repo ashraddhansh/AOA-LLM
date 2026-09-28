@@ -64,7 +64,7 @@ class RemediationService:
                         retry_verification,
                         failure_type,
                         "strict_regeneration",
-                        "uploaded documents",
+                        "document-grounded",
                         tuple(chunks),
                     )
             else:
@@ -77,11 +77,11 @@ class RemediationService:
                         web_verification,
                         failure_type,
                         "web_search",
-                        "not from your documents",
+                        "not found in your documents",
                         tuple(web_chunks),
                     )
                 return RemediationResult(
-                    "insufficient reliable information",
+                    "I could not find reliable information to answer this.",
                     VerificationResult(
                         False,
                         False,
@@ -90,14 +90,14 @@ class RemediationService:
                     ),
                     failure_type,
                     "abstain",
-                    "not from your documents",
+                    "not found in your documents",
                     tuple(web_chunks),
                     "Search results were found, but Groq returned an abstention.",
                 )
         except (GenerationError, SearchError, VerificationError) as exc:
             logger.exception("RAG remediation failed for query %r", query)
             return RemediationResult(
-                "insufficient reliable information",
+                "I could not find reliable information to answer this.",
                 VerificationResult(
                     False,
                     False,
@@ -107,24 +107,24 @@ class RemediationService:
                 failure_type,
                 "abstain",
                 (
-                    "not from your documents"
+                    "not found in your documents"
                     if failure_type is FailureType.RETRIEVAL_GAP
-                    else "uploaded documents"
+                    else "document-grounded"
                 ),
                 tuple(chunks),
                 str(exc),
             )
         return RemediationResult(
-            "insufficient reliable information",
+            "I could not find reliable information to answer this.",
             VerificationResult(
                 False, False, None, "Remediation did not produce a verified answer."
             ),
             failure_type,
             "abstain",
             (
-                "not from your documents"
+                "not found in your documents"
                 if failure_type is FailureType.RETRIEVAL_GAP
-                else "uploaded documents"
+                else "document-grounded"
             ),
             tuple(chunks),
             "The remediation answer did not pass Lynx verification.",

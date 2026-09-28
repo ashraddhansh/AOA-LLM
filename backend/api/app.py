@@ -186,7 +186,7 @@ def create_app(
         source_scores = (
             tuple(0.0 for _ in source_chunks)
             if remediation_result
-            and remediation_result.source_label == "not from your documents"
+            and remediation_result.source_label == "not found in your documents"
             else retrieved.retrieval_scores
         )
         sources = [
@@ -229,7 +229,7 @@ def create_app(
             source_label=(
                 remediation_result.source_label
                 if remediation_result
-                else "uploaded documents"
+                else "document-grounded"
             ),
             remediation_error=(
                 remediation_result.error if remediation_result else None

@@ -126,10 +126,10 @@ function VerificationCard({
       {remediation?.remediation ? (
         <p className="verification-explanation">
           {remediation.remediation === "web_search"
-            ? "Answer verified from live web search, not your documents."
+            ? "Answer from the web — not found in your documents."
             : remediation.remediation === "strict_regeneration"
-              ? "Answer regenerated against the same document context."
-              : "No reliable answer could be verified."}
+              ? "Answer from your documents — document-grounded."
+              : "I could not find reliable information to answer this."}
         </p>
       ) : null}
       {remediation?.remediation_error ? (

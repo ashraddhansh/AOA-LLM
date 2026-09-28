@@ -17,6 +17,7 @@ def is_abstention(answer: str) -> bool:
         "i don't know",
         "i do not know",
         "insufficient reliable information",
+        "i could not find reliable information to answer this",
     }
 
 
