@@ -1,5 +1,6 @@
 """Remediation orchestration for unverified answers."""
 
+import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
@@ -7,6 +8,8 @@ from backend.classification.service import FailureType
 from backend.generation.types import GenerationError, GenerationResult
 from backend.remediation.serpapi import SearchError, SerpApiSearch
 from backend.verification.types import VerificationError, VerificationResult
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -19,6 +22,7 @@ class RemediationResult:
     remediation: str | None
     source_label: str
     source_chunks: tuple[str, ...]
+    error: str | None = None
 
 
 class RemediationService:
@@ -76,7 +80,8 @@ class RemediationService:
                         "not from your documents",
                         tuple(web_chunks),
                     )
-        except (GenerationError, SearchError, VerificationError):
+        except (GenerationError, SearchError, VerificationError) as exc:
+            logger.exception("RAG remediation failed for query %r", query)
             return RemediationResult(
                 "insufficient reliable information",
                 VerificationResult(
@@ -87,8 +92,13 @@ class RemediationService:
                 ),
                 failure_type,
                 "abstain",
-                "uploaded documents",
+                (
+                    "not from your documents"
+                    if failure_type is FailureType.RETRIEVAL_GAP
+                    else "uploaded documents"
+                ),
                 tuple(chunks),
+                str(exc),
             )
         return RemediationResult(
             "insufficient reliable information",
@@ -97,6 +107,11 @@ class RemediationService:
             ),
             failure_type,
             "abstain",
-            "uploaded documents",
+            (
+                "not from your documents"
+                if failure_type is FailureType.RETRIEVAL_GAP
+                else "uploaded documents"
+            ),
             tuple(chunks),
+            "The remediation answer did not pass Lynx verification.",
         )

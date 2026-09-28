@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from dotenv import load_dotenv
 from fastapi import HTTPException, Request
 
 from backend.generation.groq import GroqGenerator
@@ -20,6 +21,8 @@ from backend.ingestion.service import IngestionService
 from backend.ingestion.types import IngestionResult
 from backend.remediation.serpapi import SerpApiSearch
 from backend.remediation.service import RemediationService
+
+load_dotenv()
 from backend.retrieval.service import RetrievalService
 from backend.retrieval.types import RetrievalResult
 from backend.verification.lynx import LynxVerifier

@@ -231,6 +231,9 @@ def create_app(
                 if remediation_result
                 else "uploaded documents"
             ),
+            remediation_error=(
+                remediation_result.error if remediation_result else None
+            ),
         )
 
     return app

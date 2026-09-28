@@ -53,6 +53,7 @@ class QuestionResponse(BaseModel):
     failure_type: str | None = None
     remediation: str | None = None
     source_label: str = "uploaded documents"
+    remediation_error: str | None = None
 
 
 class DocumentUploadResponse(BaseModel):

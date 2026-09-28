@@ -24,6 +24,7 @@ type Remediation = {
   failure_type?: string | null;
   remediation?: string | null;
   source_label?: string;
+  remediation_error?: string | null;
 };
 type Message = {
   id: string;
@@ -128,6 +129,11 @@ function VerificationCard({
             : remediation.remediation === "strict_regeneration"
               ? "Answer regenerated against the same document context."
               : "No reliable answer could be verified."}
+        </p>
+      ) : null}
+      {remediation?.remediation_error ? (
+        <p className="verification-explanation">
+          Remediation detail: {remediation.remediation_error}
         </p>
       ) : null}
     </div>
@@ -254,6 +260,7 @@ function App() {
           failure_type?: string | null;
           remediation?: string | null;
           source_label?: string;
+          remediation_error?: string | null;
         };
         updateActiveChat((chat) => ({
           ...chat,
@@ -268,6 +275,7 @@ function App() {
                 failure_type: data.failure_type,
                 remediation: data.remediation,
                 source_label: data.source_label,
+                remediation_error: data.remediation_error,
               },
             },
           ],

@@ -202,6 +202,7 @@ dependencies = [
     { name = "llama-index-readers-file" },
     { name = "llama-index-vector-stores-chroma" },
     { name = "patronus" },
+    { name = "python-dotenv" },
     { name = "python-multipart" },
 ]
 
@@ -223,6 +224,7 @@ requires-dist = [
     { name = "llama-index-readers-file", specifier = ">=0.7.0" },
     { name = "llama-index-vector-stores-chroma", specifier = ">=0.6.0" },
     { name = "patronus", specifier = ">=0.1.26" },
+    { name = "python-dotenv", specifier = ">=1.2.3" },
     { name = "python-multipart", specifier = ">=0.0.32" },
 ]
 
