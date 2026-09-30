@@ -3,6 +3,7 @@
 # FastAPI dependencies intentionally use call expressions in parameter defaults.
 # ruff: noqa: B008
 
+import logging
 import os
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -20,6 +21,7 @@ from backend.ingestion.llama_index_adapter import (
     LlamaIndexChromaStore,
     LlamaIndexEmbedder,
     LocalHashEmbedding,
+    migrate_legacy_chroma_collection,
 )
 from backend.ingestion.service import IngestionService
 from backend.ingestion.types import IngestionResult
@@ -34,6 +36,8 @@ from backend.retrieval.service import RetrievalService
 from backend.retrieval.types import RetrievalResult
 from backend.verification.lynx import LynxVerifier
 from backend.verification.types import VerificationResult
+
+logger = logging.getLogger(__name__)
 
 
 class IngestionPipeline(Protocol):
@@ -96,6 +100,21 @@ def build_default_services() -> ApiServices:
         Path(os.getenv("CHROMA_PERSIST_DIR", ".api_data/chroma")),
         collection_name=os.getenv("CHROMA_COLLECTION_NAME", "aoa_documents_local_v2"),
     )
+    migrated_chunks = migrate_legacy_chroma_collection(
+        persist_dir=Path(os.getenv("CHROMA_PERSIST_DIR", ".api_data/chroma")),
+        source_collection_name=os.getenv(
+            "CHROMA_LEGACY_COLLECTION_NAME", "aoa_documents"
+        ),
+        target_collection_name=os.getenv(
+            "CHROMA_COLLECTION_NAME", "aoa_documents_local_v2"
+        ),
+        embedder=embedder,
+    )
+    if migrated_chunks:
+        logger.info(
+            "Re-embedded %d chunks from the legacy Chroma collection",
+            migrated_chunks,
+        )
     return ApiServices(
         ingestion=IngestionService(
             loader=None,

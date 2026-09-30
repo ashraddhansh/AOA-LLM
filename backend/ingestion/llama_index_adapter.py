@@ -22,6 +22,7 @@ from llama_index.core.vector_stores import (
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
 from .types import (
+    Embedder,
     DocumentPage,
     EmbeddedChunk,
     IngestionError,
@@ -204,3 +205,66 @@ class LlamaIndexChromaStore:
         client = chromadb.PersistentClient(path=str(persist_dir))
         collection = client.get_or_create_collection(collection_name)
         return cls(ChromaVectorStore(chroma_collection=collection))
+
+
+def migrate_legacy_chroma_collection(
+    persist_dir: Path,
+    source_collection_name: str,
+    target_collection_name: str,
+    embedder: Embedder,
+) -> int:
+    """Re-embed legacy Chroma text into the active collection, retaining metadata.
+
+    Chroma collections cannot mix embedding dimensions. This migration reads
+    stored text from the previous collection and writes it with the current
+    embedder, preserving fields such as ``chat_id`` used to scope retrieval.
+    Repeated runs skip chunk IDs already present in the target collection.
+    """
+    if source_collection_name == target_collection_name:
+        return 0
+
+    import chromadb
+
+    client = chromadb.PersistentClient(path=str(persist_dir))
+    collections = client.list_collections()
+    collection_names = {
+        item if isinstance(item, str) else item.name for item in collections
+    }
+    if source_collection_name not in collection_names:
+        return 0
+
+    source = client.get_collection(source_collection_name)
+    target = client.get_or_create_collection(target_collection_name)
+    records = source.get(include=["documents", "metadatas"])
+    ids = records.get("ids", [])
+    documents = records.get("documents", [])
+    metadatas = records.get("metadatas", [])
+    existing_ids = set(target.get(include=[]).get("ids", []))
+    migrated: list[EmbeddedChunk] = []
+
+    for node_id, text, metadata in zip(ids, documents, metadatas, strict=True):
+        if not text or not text.strip():
+            continue
+        chunk_id = f"legacy:{node_id}"
+        if chunk_id in existing_ids:
+            continue
+        chunk_metadata: dict[str, str | int] = {
+            key: value
+            for key, value in (metadata or {}).items()
+            if isinstance(value, (str, int))
+        }
+        chunk_metadata["chunk_id"] = chunk_id
+        chunk_metadata.setdefault("source", "legacy-document")
+        migrated.append(
+            EmbeddedChunk(
+                text=text,
+                embedding=tuple(embedder.embed(text)),
+                metadata=chunk_metadata,
+            )
+        )
+
+    target_store = LlamaIndexChromaStore(
+        ChromaVectorStore(chroma_collection=target)
+    )
+    target_store.add(migrated)
+    return len(migrated)
