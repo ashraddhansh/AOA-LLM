@@ -58,7 +58,13 @@ class LlamaIndexDocumentLoader:
             text = document.get_content().strip()
             if not text:
                 continue
-            page_number = int(document.metadata.get("page_label", len(pages) + 1))
+            page_label = document.metadata.get("page_label")
+            try:
+                page_number = (
+                    int(page_label) if str(page_label).strip() else len(pages) + 1
+                )
+            except (TypeError, ValueError):
+                page_number = len(pages) + 1
             pages.append(DocumentPage(text=text, page_number=page_number))
         return tuple(pages)
 
