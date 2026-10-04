@@ -8,7 +8,7 @@ gap and a bad generation before choosing web verification, strict
 regeneration, or a safe abstention.
 
 This repository contains the backend service. The frontend is maintained
-separately.
+separately in [`ashraddhansh/frontend-AOA-LLM`](https://github.com/ashraddhansh/frontend-AOA-LLM).
 
 ## License
 
