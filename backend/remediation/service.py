@@ -38,6 +38,10 @@ class RemediationService:
         self._search = search
         self._threshold = retrieval_threshold
 
+    def search(self, query: str) -> tuple[str, ...]:
+        """Search the web for context used by the question graph."""
+        return tuple(self._search.search(query))
+
     def remediate(
         self,
         query: str,

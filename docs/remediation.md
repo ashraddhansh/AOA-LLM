@@ -1,22 +1,32 @@
-# Verification failure remediation
+# Question graph and remediation
 
-The question endpoint classifies an unverified answer using the strongest
-retrieval score:
+The question endpoint runs a compiled LangGraph workflow defined in
+`backend/orchestration/question_graph.py`. Each request retrieves chat-scoped
+Chroma context, generates an answer, and checks the answer against that exact
+evidence.
 
-- Scores below `RETRIEVAL_SCORE_THRESHOLD` (default `0.5`) are
-  `retrieval_gap` failures. The system searches SerpAPI, requires at least one
-  usable result, and labels a verified answer as `not found in your documents`.
-- Healthy scores are `bad_generation` failures. The system regenerates against
-  the same chunks with stricter quotation and grounding instructions, then
-  reruns Lynx.
-- If the selected remediation fails verification or an external service fails,
-  the API returns `I could not find reliable information to answer this.`
+If verification passes, the graph returns the answer and document sources. If
+it fails, the graph classifies the failure using the strongest retrieval score.
+A `bad_generation` can trigger one stricter regeneration against the same
+chunks. A `retrieval_gap` can trigger SerpAPI search when
+`SERPAPI_API_KEY` (or `WEB_SEARCH_API_KEY`) is configured. Web answers are
+verified against the search snippets and labeled as web sourced. Failed
+verification, empty search results, and provider errors lead to a safe
+abstention.
 
-Configure `SERPAPI_API_KEY` (or the existing `WEB_SEARCH_API_KEY`) in the
-backend `.env` file. Adjust the retrieval threshold only after calibrating it
-against representative documents.
+Generation and verification use independent OpenAI Chat Completions-compatible
+model configurations:
 
-Web generation uses `GROQ_WEB_MODEL` when configured. If that model is
-unavailable or attempts an unsupported tool call, the Groq adapter retries
-configured fallbacks and then discovers compatible models from Groq's
-`/models` endpoint.
+- `GENERATION_MODEL`, `GENERATION_API_BASE_URL`, `GENERATION_API_KEY`
+- `VERIFICATION_MODEL`, `VERIFICATION_API_BASE_URL`, `VERIFICATION_API_KEY`
+- `WEB_GENERATION_MODEL` optionally chooses a model name for web answers.
+
+Verification settings fall back to generation settings. Model/provider changes
+are read at backend startup, so restart the backend to apply them. Native
+provider APIs that do not implement OpenAI Chat Completions need a compatible
+endpoint or a dedicated adapter.
+
+The graph is compiled once per API process and invoked per question. It does
+not use a LangGraph checkpointer; conversation history remains managed by the
+existing application store. Add a durable checkpointer only if graph execution
+needs to pause, resume, or preserve intermediate state across requests.

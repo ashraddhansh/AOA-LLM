@@ -6,7 +6,7 @@
 import logging
 import os
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
@@ -14,9 +14,14 @@ from dotenv import load_dotenv
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from backend.generation.groq import GroqGenerator
+from backend.generation.openai_compatible import OpenAICompatibleGenerator
 from backend.generation.service import GenerationService
 from backend.generation.types import GenerationPipeline
+from backend.llm.openai_compatible import ChatCompletionClient
+from backend.orchestration.question_graph import (
+    QuestionGraphRunner,
+    build_question_graph,
+)
 from backend.ingestion.llama_index_adapter import (
     LlamaIndexChromaStore,
     LlamaIndexEmbedder,
@@ -34,8 +39,8 @@ from backend.db.models import User
 from backend.db.session import get_session
 from backend.retrieval.service import RetrievalService
 from backend.retrieval.types import RetrievalResult
-from backend.verification.lynx import LynxVerifier
 from backend.verification.types import VerificationResult
+from backend.verification.openai_compatible import OpenAICompatibleVerifier
 
 logger = logging.getLogger(__name__)
 
@@ -76,24 +81,48 @@ class ApiServices:
     generation: GenerationPipeline
     verification: VerificationPipeline
     remediation: RemediationService | None = None
+    question_graph: QuestionGraphRunner = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        """Compile the graph once and reuse it for each question request."""
+        threshold = float(os.getenv("RETRIEVAL_SCORE_THRESHOLD", "0.5"))
+        object.__setattr__(
+            self,
+            "question_graph",
+            build_question_graph(
+                self.retrieval,
+                self.generation,
+                self.verification,
+                self.remediation,
+                threshold,
+            ),
+        )
 
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def build_default_services() -> ApiServices:
-    """Build the production pipeline using local embeddings, Groq, and Chroma."""
-    api_key = os.getenv("GROQ_API_KEY")
-    if not api_key:
-        raise RuntimeError("GROQ_API_KEY is required to configure the RAG pipeline.")
-    if not os.getenv("PATRONUS_API_KEY"):
-        raise RuntimeError(
-            "PATRONUS_API_KEY is required to configure the verification pipeline."
-        )
-    if not (os.getenv("SERPAPI_API_KEY") or os.getenv("WEB_SEARCH_API_KEY")):
-        raise RuntimeError(
-            "SERPAPI_API_KEY is required to configure web-search remediation."
-        )
+    """Build Chroma, configurable chat-model, and optional search services."""
+
+    generation_model = os.getenv("GENERATION_MODEL") or os.getenv(
+        "GROQ_MODEL", "openai/gpt-oss-20b"
+    )
+    generation_base_url = os.getenv(
+        "GENERATION_API_BASE_URL",
+        os.getenv("GROQ_API_BASE_URL", "https://api.groq.com/openai/v1"),
+    )
+    generation_api_key = os.getenv("GENERATION_API_KEY") or os.getenv("GROQ_API_KEY")
+    verification_model = os.getenv("VERIFICATION_MODEL") or generation_model
+    verification_base_url = (
+        os.getenv("VERIFICATION_API_BASE_URL") or generation_base_url
+    )
+    verification_api_key = (
+        os.getenv("VERIFICATION_API_KEY") or generation_api_key
+    )
+    web_model = os.getenv("WEB_GENERATION_MODEL") or os.getenv(
+        "GROQ_WEB_MODEL", generation_model
+    )
 
     embedder = LlamaIndexEmbedder(LocalHashEmbedding())
     store = LlamaIndexChromaStore.from_persist_dir(
@@ -115,6 +144,11 @@ def build_default_services() -> ApiServices:
             "Re-embedded %d chunks from the legacy Chroma collection",
             migrated_chunks,
         )
+    search = (
+        SerpApiSearch()
+        if os.getenv("SERPAPI_API_KEY") or os.getenv("WEB_SEARCH_API_KEY")
+        else None
+    )
     return ApiServices(
         ingestion=IngestionService(
             loader=None,
@@ -123,24 +157,29 @@ def build_default_services() -> ApiServices:
         ),
         retrieval=RetrievalService(embedder=embedder, vector_store=store),
         generation=GenerationService(
-            GroqGenerator(
-                api_key=api_key,
-                model=os.getenv("GROQ_MODEL"),
+            OpenAICompatibleGenerator(
+                ChatCompletionClient(
+                    model=generation_model,
+                    api_base_url=generation_base_url,
+                    api_key=generation_api_key,
+                )
             ),
-            web_generator=GroqGenerator(
-                api_key=api_key,
-                model=os.getenv("GROQ_WEB_MODEL", "openai/gpt-oss-20b"),
-                fallback_models=(
-                    "qwen/qwen3-32b",
-                    "meta-llama/llama-4-scout-17b-16e-instruct",
+            web_generator=OpenAICompatibleGenerator(
+                ChatCompletionClient(
+                    model=web_model,
+                    api_base_url=generation_base_url,
+                    api_key=generation_api_key,
                 ),
             ),
         ),
-        verification=LynxVerifier(),
-        remediation=RemediationService(
-            SerpApiSearch(),
-            retrieval_threshold=float(os.getenv("RETRIEVAL_SCORE_THRESHOLD", "0.5")),
+        verification=OpenAICompatibleVerifier(
+            ChatCompletionClient(
+                model=verification_model,
+                api_base_url=verification_base_url,
+                api_key=verification_api_key,
+            )
         ),
+        remediation=RemediationService(search) if search else None,
     )
 
 

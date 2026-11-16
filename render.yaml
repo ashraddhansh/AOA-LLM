@@ -3,7 +3,7 @@ services:
     name: aoa-api
     runtime: python
     plan: starter
-    buildCommand: pip install uv && uv sync --frozen
+    buildCommand: pip install uv && uv sync
     startCommand: uv run alembic upgrade head && uv run uvicorn backend.api.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
@@ -13,15 +13,21 @@ services:
         generateValue: true
       - key: GOOGLE_CLIENT_ID
         sync: false
-      - key: GROQ_API_KEY
+      - key: GENERATION_MODEL
+        value: openai/gpt-oss-20b
+      - key: GENERATION_API_BASE_URL
+        value: https://api.groq.com/openai/v1
+      - key: GENERATION_API_KEY
         sync: false
-      - key: GROQ_MODEL
+      - key: VERIFICATION_MODEL
+        value: openai/gpt-oss-20b
+      - key: VERIFICATION_API_BASE_URL
+        value: https://api.groq.com/openai/v1
+      - key: VERIFICATION_API_KEY
         sync: false
-      - key: PATRONUS_API_KEY
-        sync: false
+      - key: WEB_GENERATION_MODEL
+        value: openai/gpt-oss-20b
       - key: SERPAPI_API_KEY
-        sync: false
-      - key: WEB_SEARCH_API_KEY
         sync: false
       - key: CORS_ORIGINS
         sync: false

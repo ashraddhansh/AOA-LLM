@@ -2,9 +2,9 @@
 
 AOA is a document-based retrieval-augmented generation (RAG) API. Users upload
 documents, ask questions, and receive answers grounded in the retrieved
-content. Every generated answer is checked for faithfulness with Patronus
-Lynx. When verification fails, the system distinguishes between a retrieval
-gap and a bad generation before choosing web verification, strict
+content. Every generated answer is checked for faithfulness by a configurable
+verification model. When verification fails, the system distinguishes between
+a retrieval gap and a bad generation before choosing web verification, strict
 regeneration, or a safe abstention.
 
 This repository contains the backend service. The frontend is maintained
@@ -25,7 +25,7 @@ flowchart TD
     E[Ask question] --> F[Retrieve top-k chunks]
     D --> F
     F --> G[Generate grounded answer]
-    G --> H[Patronus Lynx verification]
+    G --> H[Model verification]
     H -->|Pass| I[Return answer]
     H -->|Fail| J{Classify failure}
     J -->|Retrieval gap| K[Web search remediation]
@@ -44,7 +44,7 @@ flowchart TD
 3. **Generation** asks the configured LLM to answer only from the retrieved
    context.
 4. **Verification** sends the exact question, answer, and generation context
-   to Patronus Lynx for a faithfulness judgment.
+   to the configured judge model for a faithfulness judgment.
 5. **Classification** uses the top retrieval score to distinguish:
    - `retrieval_gap`: relevant source context was not found, so web
      verification may be appropriate.
@@ -54,7 +54,9 @@ flowchart TD
    be verified, the API returns an insufficient-information response rather
    than an unverified answer.
 
-The complete design rationale and state model are documented in
+These steps are represented as nodes and conditional routes in
+`backend/orchestration/question_graph.py`. The complete design rationale and
+state model are documented in
 [`rag-system-lld.md`](./rag-system-lld.md).
 
 ## Technology
@@ -63,9 +65,8 @@ The complete design rationale and state model are documented in
 - FastAPI and Uvicorn
 - LlamaIndex for parsing, chunking, embeddings, and retrieval
 - Chroma for persistent vector storage
-- LangGraph-style pipeline orchestration
-- Groq for answer generation
-- Patronus Lynx for faithfulness verification
+- LangGraph for question workflow orchestration
+- OpenAI Chat Completions-compatible endpoints for generation and verification
 - SerpAPI or the configured web-search provider for remediation
 - PostgreSQL with SQLAlchemy and Alembic for application data
 
@@ -78,9 +79,10 @@ backend/
 ├── db/             SQLAlchemy models, repositories, and migrations
 ├── generation/     LLM prompts and answer generation
 ├── ingestion/      File loading, chunking, and embedding
-├── remediation/    Web-search and regeneration flows
+├── orchestration/  LangGraph question workflow
+├── remediation/    Web-search adapter
 ├── retrieval/      Similarity retrieval
-└── verification/   Patronus Lynx integration
+└── verification/   Configurable model-as-judge integration
 tests/unit/         Unit tests with external services mocked
 docs/               Database, deployment, and remediation notes
 ```
@@ -108,8 +110,11 @@ Copy the example environment file and set the required values:
 cp .env.example .env
 ```
 
-At minimum, configure `DATABASE_URL`, `GROQ_API_KEY`, `PATRONUS_API_KEY`,
-`SERPAPI_API_KEY` (or `WEB_SEARCH_API_KEY`), and `AUTH_SECRET_KEY`.
+Configure `DATABASE_URL`, `GENERATION_MODEL`, `GENERATION_API_BASE_URL`,
+`GENERATION_API_KEY`, `VERIFICATION_MODEL`, `VERIFICATION_API_BASE_URL`,
+`VERIFICATION_API_KEY`, and `AUTH_SECRET_KEY`. Verification settings default to
+the generation model and endpoint when omitted. Configure
+`SERPAPI_API_KEY` (or `WEB_SEARCH_API_KEY`) to enable web remediation.
 `GOOGLE_CLIENT_ID` is required only when Google sign-in is enabled. Keep all
 credentials in `.env`; never commit them.
 
@@ -169,7 +174,7 @@ uv run black --check .
 uv run mypy backend/
 ```
 
-Tests must mock Groq, Patronus, web search, and other external services.
+Tests should mock model endpoints, web search, and other external services.
 Failure paths are part of the contract: API failures must produce an explicit
 unverified or abstaining result rather than silently returning an answer.
 
@@ -181,7 +186,13 @@ The main tuning values are:
   classified as a retrieval gap.
 - `EMBED_DIM`: dimension used by the local hash embedding model.
 - `CHROMA_PERSIST_DIR`: local Chroma persistence directory.
-- `GROQ_MODEL` and `GROQ_WEB_MODEL`: generation models.
+- `GENERATION_MODEL`, `GENERATION_API_BASE_URL`, and `GENERATION_API_KEY`:
+  answer generation endpoint.
+- `VERIFICATION_MODEL`, `VERIFICATION_API_BASE_URL`, and
+  `VERIFICATION_API_KEY`: independent verification endpoint.
+- `WEB_GENERATION_MODEL`: optional model name for web-grounded answers.
+- Model changes take effect after restarting the backend. Endpoints must
+  implement the OpenAI Chat Completions API.
 
 See [`.env.example`](./.env.example), [`docs/database.md`](./docs/database.md),
 and [`docs/deployment.md`](./docs/deployment.md) for environment and
@@ -208,7 +219,8 @@ For vector-store migration guidance, see
 
 - Never return an answer that failed faithfulness verification without clearly
   marking it as unverified.
-- Preserve the exact retrieved context used for generation when calling Lynx.
+- Preserve the exact retrieved context used for generation when calling the
+  configured verifier.
 - Classify the failure before selecting remediation.
 - Limit regeneration retries to one.
 - Surface ingestion and provider failures explicitly.

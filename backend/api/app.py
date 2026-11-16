@@ -12,7 +12,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select
 
 from backend.auth import google_profile, hash_password, issue_token, verify_password
-from backend.classification.service import FailureType
 from backend.db.models import Chat, Document, User
 from backend.db.repositories import (
     append_message,
@@ -28,6 +27,7 @@ from backend.db.repositories import (
 from backend.db.session import get_session
 from backend.generation.types import GenerationError
 from backend.ingestion.types import IngestionError
+from backend.orchestration.question_graph import QuestionState
 from backend.retrieval.types import RetrievalError
 from backend.verification.types import VerificationError
 
@@ -74,7 +74,11 @@ def create_app(
     app = FastAPI(title="AOA API", version="0.1.0")
     app.state.chat_store = chat_store or InMemoryChatStore()
     app.state.services = services
-    if services is None and os.getenv("GROQ_API_KEY"):
+    if services is None and (
+        os.getenv("GENERATION_MODEL")
+        or os.getenv("GENERATION_API_KEY")
+        or os.getenv("GROQ_API_KEY")
+    ):
         app.state.services = build_default_services()
     app.state.upload_dir = Path(".api_uploads")
 
@@ -347,96 +351,41 @@ def create_app(
         elif chat is None:
             raise HTTPException(status_code=404, detail="Chat not found")
         try:
-            retrieved = pipeline.retrieval.retrieve(
-                payload.query, filters={"chat_id": chat_id}
-            )
-            answer = pipeline.generation.generate(
-                payload.query, retrieved.retrieved_chunks
-            )
-            verification = pipeline.verification.verify(
-                payload.query,
-                answer.answer,
-                retrieved.retrieved_chunks,
-            )
-            remediation_result = None
-            if pipeline.remediation is not None and payload.web_search:
-                remediation_result = pipeline.remediation.remediate(
-                    payload.query,
-                    answer.answer,
-                    retrieved.retrieved_chunks,
-                    (
-                        retrieved.retrieval_scores[0]
-                        if retrieved.retrieval_scores
-                        else None
-                    ),
-                    verification,
-                    pipeline.generation.generate_from_web,
-                    pipeline.generation.regenerate,
-                    pipeline.verification.verify,
-                    FailureType.RETRIEVAL_GAP,
+            state = pipeline.question_graph.invoke(
+                QuestionState(
+                    query=payload.query,
+                    chat_id=chat_id,
+                    web_search=payload.web_search,
                 )
+            )
         except (RetrievalError, GenerationError, VerificationError) as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         if not db_enabled():
             assert chat is not None
             chat.message_count += 2
             app.state.chat_store.touch(chat)
-        source_chunks = (
-            remediation_result.source_chunks
-            if remediation_result
-            else retrieved.retrieved_chunks
-        )
-        source_scores = (
-            tuple(0.0 for _ in source_chunks)
-            if remediation_result
-            and remediation_result.source_label == "not found in your documents"
-            else retrieved.retrieval_scores
-        )
+        source_chunks = state["source_chunks"]
+        source_scores = state["source_scores"]
         sources = [
             SourceReference(text=text, score=score)
             for text, score in zip(source_chunks, source_scores, strict=True)
         ]
+        verification = state["verification"]
+        failure_type = state.get("failure_type")
         response = QuestionResponse(
             query=payload.query,
-            answer=remediation_result.answer if remediation_result else answer.answer,
+            answer=state["answer"],
             sources=sources,
             verification=VerificationResponse(
-                passed=(
-                    remediation_result.verification.passed
-                    if remediation_result
-                    else verification.passed
-                ),
-                verified=(
-                    remediation_result.verification.verified
-                    if remediation_result
-                    else verification.verified
-                ),
-                score=(
-                    remediation_result.verification.score
-                    if remediation_result
-                    else verification.score
-                ),
-                explanation=(
-                    remediation_result.verification.explanation
-                    if remediation_result
-                    else verification.explanation
-                ),
+                passed=verification.passed,
+                verified=verification.verified,
+                score=verification.score,
+                explanation=verification.explanation,
             ),
-            failure_type=(
-                remediation_result.failure_type.value
-                if remediation_result
-                and isinstance(remediation_result.failure_type, FailureType)
-                else None
-            ),
-            remediation=remediation_result.remediation if remediation_result else None,
-            source_label=(
-                remediation_result.source_label
-                if remediation_result
-                else "document-grounded"
-            ),
-            remediation_error=(
-                remediation_result.error if remediation_result else None
-            ),
+            failure_type=failure_type.value if failure_type else None,
+            remediation=state.get("remediation"),
+            source_label=state["source_label"],
+            remediation_error=state.get("remediation_error"),
         )
         if db_enabled():
             assert current_user is not None
@@ -459,7 +408,11 @@ def create_app(
                     "assistant",
                     response.answer,
                     source_type=(
-                        "web" if response.source_label == "web" else "document"
+                        "web"
+                        if response.remediation == "web_search"
+                        else "abstain"
+                        if response.remediation == "abstain"
+                        else "document"
                     ),
                     lynx_verdict=("pass" if response.verification.passed else "fail"),
                     verification_verified=response.verification.verified,
