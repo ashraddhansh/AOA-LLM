@@ -62,8 +62,7 @@ The complete design rationale and state model are documented in
 - Python 3.11+
 - FastAPI and Uvicorn
 - LlamaIndex for parsing, chunking, embeddings, and retrieval
-- Chroma for local vector storage; PostgreSQL/pgvector is supported for
-  production deployments
+- Chroma for persistent vector storage
 - LangGraph-style pipeline orchestration
 - Groq for answer generation
 - Patronus Lynx for faithfulness verification
@@ -76,7 +75,7 @@ The complete design rationale and state model are documented in
 backend/
 ├── api/            FastAPI application, routes, schemas, and state
 ├── classification/ Failure classification
-├── db/             SQLAlchemy models, repositories, migrations, and vectors
+├── db/             SQLAlchemy models, repositories, and migrations
 ├── generation/     LLM prompts and answer generation
 ├── ingestion/      File loading, chunking, and embedding
 ├── remediation/    Web-search and regeneration flows
@@ -180,7 +179,7 @@ The main tuning values are:
 
 - `RETRIEVAL_SCORE_THRESHOLD`: score below which a verification failure is
   classified as a retrieval gap.
-- `EMBED_DIM`: embedding dimension used by the configured vector store.
+- `EMBED_DIM`: dimension used by the local hash embedding model.
 - `CHROMA_PERSIST_DIR`: local Chroma persistence directory.
 - `GROQ_MODEL` and `GROQ_WEB_MODEL`: generation models.
 

@@ -8,7 +8,6 @@ from sqlalchemy import case, select
 from sqlalchemy.orm import Session
 
 from .models import Chat, Document, DocumentText, Message, User
-from .vector import delete_document_vectors
 
 
 def create_user(session: Session, email: str, password_hash: str | None = None) -> User:
@@ -87,13 +86,12 @@ def list_documents(session: Session, user_id: UUID) -> list[Document]:
 
 
 def delete_document(session: Session, document_id: UUID, user_id: UUID) -> bool:
-    """Delete an owned document and its unreferenced vector rows."""
+    """Delete an owned document record."""
     document = session.scalar(
         select(Document).where(Document.id == document_id, Document.user_id == user_id)
     )
     if document is None:
         return False
-    delete_document_vectors(session, document_id)
     session.delete(document)
     session.flush()
     return True

@@ -16,7 +16,7 @@ target_metadata = Base.metadata
 
 
 def include_object(object_, name, type_, reflected, compare_to):  # type: ignore[no-untyped-def]
-    """Exclude the LlamaIndex-owned vector table from Alembic."""
+    """Exclude legacy vector-store tables from Alembic autogeneration."""
     return not (type_ == "table" and name in {"data_vectors", "aoa_embeddings"})
 
 

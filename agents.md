@@ -17,7 +17,7 @@ Core pipeline: **ingest → retrieve → generate → verify (Lynx) → classify
 | Backend framework | FastAPI |
 | Orchestration | LangGraph |
 | Retrieval/indexing | LlamaIndex |
-| Vector DB | ChromaDB (dev), Qdrant/pgvector (prod) |
+| Vector DB | ChromaDB |
 | Generation LLM | Groq API |
 | Hallucination verification | Patronus Lynx API |
 | Web verification | Tavily / SerpAPI |
@@ -49,7 +49,6 @@ source .venv/bin/activate
   - `PATRONUS_API_KEY`
   - `SERPAPI_API_KEY` (or `WEB_SEARCH_API_KEY`)
   - `WEB_SEARCH_API_KEY`
-  - `VECTOR_DB_URL` (if not using local Chroma)
 
 ## 4. Project Structure
 

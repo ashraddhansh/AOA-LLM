@@ -1,10 +1,10 @@
 # PostgreSQL database layer
 
 The relational database stores ownership, document lifecycle, chat history, and
-RAG evaluation metadata. The existing LlamaIndex `PGVectorStore` owns the
-embedding table; Alembic deliberately excludes that table from autogeneration.
-The current local embedding implementation is 256-dimensional, so the default
-is `EMBED_DIM=256`.
+RAG evaluation metadata. Document chunks and embeddings are stored in the
+persistent Chroma collection configured by `CHROMA_PERSIST_DIR`. The current
+local embedding implementation is 256-dimensional, so the default is
+`EMBED_DIM=256`.
 
 ## Entity relationship diagram
 
@@ -18,8 +18,8 @@ erDiagram
 ```
 
 `chat_documents` is the join table for the many-to-many chat/document
-relationship. All child foreign keys cascade on deletion. Vector rows are not
-foreign-keyed and must be removed explicitly by the document deletion service.
+relationship. All child foreign keys cascade on deletion. Chroma data is stored
+separately from the relational tables.
 
 ## Tables
 
@@ -68,11 +68,7 @@ these endpoints after sign-in.
 
 ## Vector storage
 
-Use LlamaIndex `PGVectorStore` with `EMBED_DIM` and include `user_id`,
-`document_id`, `page_number`, and `chunk_index` in every node's metadata.
-Every retrieval must use `metadata_filters(user_id, document_ids)` from
-`backend.db.vector`. The vector table currently uses sequential scans.
-
-TODO: add an HNSW index after measuring production workload. HNSW is generally
-appropriate for cosine distance, but index memory and supported dimensions
-depend on the pgvector version; validate those limits before enabling it.
+The current API creates a persistent Chroma client at `CHROMA_PERSIST_DIR` and
+uses it for ingestion and retrieval. Mount durable storage at that path in
+container deployments. PostgreSQL stores application records only; its
+vector extension is not required by the current backend.

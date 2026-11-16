@@ -18,7 +18,7 @@ A general-purpose RAG system where users upload documents and ask questions. Ans
 | Layer | Tool | Purpose |
 |---|---|---|
 | Document parsing, chunking, embedding, retrieval | **LlamaIndex** | Ingest uploaded files, build vector index, retrieve relevant chunks |
-| Vector storage | **Chroma** (start) → Qdrant/pgvector (scale) | Store chunk embeddings |
+| Vector storage | **Chroma** | Persist and query chunk embeddings |
 | Orchestration / control flow | **LangGraph** | Manage the multi-step, branching pipeline as a state graph |
 | Answer generation | LLM (e.g. Claude) | Generate answers from retrieved context |
 | Hallucination detection | **Patronus Lynx** | Score answer faithfulness against retrieved context |
@@ -128,7 +128,7 @@ class RAGState(TypedDict):
 - Retrieval top-k and chunk size — start with defaults, tune per document type
 - Retrieval score threshold for `retrieval_gap` classification
 - Whether web verification also runs proactively (not just on failure) for high-stakes domains
-- Vector DB choice at scale (Chroma → Qdrant/pgvector)
+- Shared vector storage for horizontally scaled deployments
 - Self-hosted vs API Lynx (cost vs latency trade-off)
 
 ## 10. Future Improvements

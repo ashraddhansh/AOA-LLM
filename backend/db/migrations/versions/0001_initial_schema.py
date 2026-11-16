@@ -11,8 +11,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    """Create the relational schema and required extensions."""
-    op.execute("CREATE EXTENSION IF NOT EXISTS vector")
+    """Create the relational schema and required extension."""
     op.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
     op.create_table(
         "users",
