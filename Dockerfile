@@ -2,6 +2,8 @@ FROM ghcr.io/astral-sh/uv:0.13.8 AS uv
 
 FROM python:3.11-slim
 
+ARG DEBIAN_FRONTEND=noninteractive
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
@@ -9,7 +11,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PORT=8000
 
 RUN apt-get update \
-    && apt-get install --no-install-recommends -y libgomp1 \
+    && apt-get install -y --no-install-recommends libgomp1 \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home --uid 10001 app
 
