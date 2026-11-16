@@ -190,6 +190,10 @@ deployment details.
 
 ## Deployment
 
+The backend can be built as a platform-neutral container. See
+[`docs/container-deployment.md`](./docs/container-deployment.md) for Docker
+build, runtime configuration, migration, and local Compose instructions.
+
 The repository includes a Render blueprint in [`render.yaml`](./render.yaml).
 It runs migrations before starting Uvicorn:
 
